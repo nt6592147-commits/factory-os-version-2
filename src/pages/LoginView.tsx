@@ -1,10 +1,27 @@
-import React from 'react';
-import { Bot, Database, Factory, Lock, ShieldCheck } from 'lucide-react';
+import React, { useState } from 'react';
+import { Bot, Check, Copy, Database, ExternalLink, Factory, Lock, ShieldCheck } from 'lucide-react';
+import firebaseConfig from '../../firebase-applet-config.json';
 import { useAuth } from '../contexts/AuthContext';
 import { PWAInstallButton } from '../components/PWAControls';
 
 export const LoginView: React.FC = () => {
   const { signInWithGoogle, authError, authLoading } = useAuth();
+  const [copiedHost, setCopiedHost] = useState(false);
+
+  const currentHost = typeof window !== 'undefined' ? window.location.hostname : '';
+  const isUnauthorizedDomain = Boolean(authError?.includes('auth/unauthorized-domain'));
+  const authSettingsUrl = `https://console.firebase.google.com/project/${firebaseConfig.projectId}/authentication/settings`;
+
+  const handleCopyHost = async () => {
+    if (!currentHost) return;
+    try {
+      await navigator.clipboard.writeText(currentHost);
+      setCopiedHost(true);
+      setTimeout(() => setCopiedHost(false), 2000);
+    } catch {
+      // Clipboard fallback ignored
+    }
+  };
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col justify-between">
@@ -79,8 +96,36 @@ export const LoginView: React.FC = () => {
             </div>
 
             {authError && (
-              <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-800">
-                {authError}
+              <div className="p-3.5 bg-red-50 border border-red-200 rounded-lg text-xs text-red-900 space-y-2">
+                <div className="font-semibold">{authError}</div>
+                {isUnauthorizedDomain && currentHost && (
+                  <div className="space-y-2 pt-1 border-t border-red-200 text-red-800">
+                    <div>
+                      Add this exact domain in Firebase Console under{' '}
+                      <span className="font-semibold">Authentication → Settings → Authorized domains</span>:
+                    </div>
+                    <div className="flex items-center justify-between gap-2 bg-white border border-red-200 rounded px-2.5 py-1.5 font-mono text-[11px] text-slate-900">
+                      <span className="truncate">{currentHost}</span>
+                      <button
+                        type="button"
+                        onClick={handleCopyHost}
+                        className="inline-flex items-center gap-1 text-blue-700 hover:text-blue-900 font-sans font-medium shrink-0"
+                      >
+                        {copiedHost ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                        {copiedHost ? 'Copied' : 'Copy'}
+                      </button>
+                    </div>
+                    <a
+                      href={authSettingsUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1 text-blue-700 hover:underline font-medium"
+                    >
+                      Open Firebase Auth Settings ({firebaseConfig.projectId})
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                  </div>
+                )}
               </div>
             )}
 

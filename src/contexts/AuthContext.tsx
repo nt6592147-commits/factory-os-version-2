@@ -276,8 +276,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setAuthError(null);
     try {
       await signInWithPopup(auth, googleAuthProvider);
-    } catch (err) {
-      setAuthError(err instanceof Error ? err.message : 'Google sign-in failed.');
+    } catch (err: unknown) {
+      const code = typeof err === 'object' && err !== null && 'code' in err ? String((err as { code?: string }).code) : '';
+      const rawMessage = err instanceof Error ? err.message : 'Google sign-in failed.';
+      if (code === 'auth/unauthorized-domain' || rawMessage.includes('auth/unauthorized-domain')) {
+        const host = typeof window !== 'undefined' ? window.location.hostname : 'this domain';
+        setAuthError(
+          `auth/unauthorized-domain: "${host}" is not yet in Firebase Authentication Authorized Domains.`
+        );
+      } else if (code === 'auth/popup-blocked' || rawMessage.includes('auth/popup-blocked')) {
+        setAuthError(
+          'Sign-in popup was blocked by your browser. Please allow popups for this site and try Sign In with Google again.'
+        );
+      } else {
+        setAuthError(rawMessage);
+      }
     }
   };
 
