@@ -1,0 +1,6 @@
+{
+  "name": "Factory Memory OS",
+  "description": "Every Machine. Every Material. Every Production Record. Connected. Intelligent digital operations platform for manufacturing factories.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

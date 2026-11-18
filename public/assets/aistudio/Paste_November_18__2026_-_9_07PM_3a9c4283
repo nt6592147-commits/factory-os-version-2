@@ -1,0 +1,1029 @@
+PROJECT NAME: FACTORY MEMORY OS
+
+TAGLINE: Every Machine. Every Material. Every Production Record. Connected.
+
+PRODUCT CATEGORY:
+Industrial Technology / Manufacturing Operations Management System.
+
+YOUR ROLE:
+
+Act as a senior software architect, full-stack engineer, database engineer, AI engineer, cybersecurity specialist, and enterprise UI/UX designer.
+
+Your responsibility is to design and build a complete, scalable manufacturing operations management web application called Factory Memory OS.
+
+Do not build a landing-page-only website or a static demonstration.
+
+Build a real, functional, database-driven application with authentication, departmental workflows, record management, analytics, reporting, and AI-powered information retrieval.
+
+==================================================
+1. PRODUCT VISION
+==================================================
+
+Factory Memory OS is an intelligent digital operations platform designed to modernize how manufacturing factories record, organize, retrieve, and analyze operational information.
+
+Many factories depend on physical logbooks, paper reports, handwritten measurements, manual calculations, and information passed verbally between workers.
+
+Important information can become difficult to retrieve when records are scattered across different departments and notebooks.
+
+Factory Memory OS will provide one centralized digital system where authorized factory personnel can record and access operational information.
+
+The system should digitize:
+
+- Production records.
+- Material identification and measurements.
+- Material weights and quantities.
+- Machine information.
+- Machine breakdowns.
+- Electrical maintenance records.
+- Mechanical maintenance records.
+- Preventive maintenance schedules.
+- Spare parts usage.
+- Machine downtime.
+- Production waste.
+- Quality control records.
+- Shift handovers.
+- Daily departmental reports.
+- Factory operational history.
+
+The application must also include an AI assistant capable of searching the factory's recorded information using natural language.
+
+LONG-TERM VISION:
+
+Become the digital memory and intelligence layer for manufacturing companies.
+
+==================================================
+2. TECHNOLOGY STACK
+==================================================
+
+Use the following technologies:
+
+Frontend:
+- React.
+- TypeScript.
+- Tailwind CSS.
+- Lucide React.
+- Recharts.
+- React Router.
+
+Backend:
+- Supabase.
+- PostgreSQL.
+- Supabase Authentication.
+- Supabase Storage.
+- Supabase Edge Functions where appropriate.
+
+AI:
+- OpenAI API.
+- Retrieval-Augmented Generation (RAG).
+- Database-backed information retrieval.
+- Semantic search using PostgreSQL and pgvector where appropriate.
+
+Infrastructure:
+- GitHub.
+- Vercel.
+- Supabase hosting and database services.
+
+Application:
+- Responsive web application.
+- Progressive Web App (PWA).
+- Installable on Android, iPhone, Windows and tablets.
+
+Use a clean, modular architecture.
+
+Never expose secret API keys in frontend code.
+
+Do not use localStorage as the permanent production database.
+
+==================================================
+3. USER AUTHENTICATION AND PERMISSIONS
+==================================================
+
+Create a secure authentication system.
+
+Users should sign in using their assigned accounts.
+
+Support the following roles:
+
+1. Super Administrator.
+2. Factory Administrator.
+3. Factory Manager.
+4. Production Manager.
+5. Production Supervisor.
+6. Electrical Maintenance Staff.
+7. Mechanical Maintenance Staff.
+8. Material Checker.
+9. Storekeeper.
+10. Quality Control Staff.
+11. Machine Operator.
+
+Each role must have appropriate permissions.
+
+For example:
+
+Machine operators:
+- Submit machine incident reports.
+- View authorized production information.
+- Submit shift reports.
+
+Electrical maintenance:
+- View assigned electrical incidents.
+- Create electrical maintenance records.
+- Record spare parts used.
+- Update maintenance status.
+- Submit shift-end maintenance reports.
+
+Maintenance Head:
+- Review maintenance reports.
+- Monitor maintenance activities.
+- View machine downtime.
+- Review unresolved faults.
+- Monitor maintenance performance.
+
+Factory management:
+- View authorized factory-wide reports.
+- Monitor production performance.
+- Review departmental activities.
+- Access analytics.
+
+Administrators:
+- Manage users.
+- Assign roles.
+- Configure departments.
+- Manage system settings.
+
+Enforce permissions on the backend, not just by hiding frontend buttons.
+
+==================================================
+4. MAIN DASHBOARD
+==================================================
+
+Create a professional enterprise dashboard.
+
+The dashboard should provide a general overview of factory operations.
+
+Display:
+
+- Total production today.
+- Production targets.
+- Production efficiency.
+- Total materials received.
+- Materials consumed.
+- Available material inventory.
+- Active machines.
+- Machines currently stopped.
+- Open machine incidents.
+- Total machine downtime.
+- Maintenance activities completed.
+- Pending maintenance tasks.
+- Pending departmental reports.
+
+Include:
+
+- Production performance charts.
+- Machine status overview.
+- Material usage charts.
+- Maintenance activity timeline.
+- Recent incidents.
+- Recent reports.
+- Important notifications.
+
+Allow filtering by:
+- Today.
+- Yesterday.
+- This week.
+- This month.
+- Custom date range.
+
+Dashboard information must come from actual database records.
+
+==================================================
+5. MATERIAL MANAGEMENT SYSTEM
+==================================================
+
+Create a complete digital material management module.
+
+The system must record materials from arrival through inspection, storage, consumption, and remaining inventory.
+
+Material registration fields:
+
+- Material ID.
+- Material name.
+- Material category.
+- Supplier.
+- Batch number.
+- Width (mm).
+- Thickness (mm).
+- Weight (kg).
+- Quantity.
+- Unit of measurement.
+- Date received.
+- Storage location.
+- Material status.
+- Additional notes.
+
+MATERIAL INSPECTION:
+
+Allow authorized material checkers to record:
+
+- Material identification number.
+- Expected width.
+- Actual measured width.
+- Expected thickness.
+- Actual measured thickness.
+- Expected weight.
+- Actual measured weight.
+- Inspection date.
+- Inspector.
+- Inspection result.
+- Comments.
+
+MATERIAL TRACKING:
+
+Track:
+
+- Materials received.
+- Materials inspected.
+- Materials approved.
+- Materials rejected.
+- Materials issued to production.
+- Materials consumed.
+- Remaining quantities.
+- Material wastage.
+
+Every material must have a historical record.
+
+Allow users to retrieve previous inspections and material movements.
+
+Include configurable measurement units and validation rules.
+
+Never automatically assume that all materials use the same specifications.
+
+==================================================
+6. PRODUCTION MANAGEMENT SYSTEM
+==================================================
+
+Create a complete production tracking module.
+
+Allow authorized personnel to record production activities.
+
+Fields:
+
+- Production date.
+- Product name.
+- Production line.
+- Machine.
+- Production shift.
+- Production target.
+- Actual production output.
+- Rejected products.
+- Materials consumed.
+- Production start time.
+- Production end time.
+- Supervisor.
+- Operator.
+- Production notes.
+
+Include:
+
+- Daily production reports.
+- Weekly production reports.
+- Monthly production reports.
+- Production targets versus actual output.
+- Material consumption.
+- Rejected products.
+- Production efficiency.
+- Historical production records.
+
+Allow management to compare production performance across different dates, machines, lines and shifts.
+
+==================================================
+7. MACHINE MANAGEMENT SYSTEM
+==================================================
+
+Create a centralized machine register.
+
+Each machine should have:
+
+- Machine ID.
+- Machine name.
+- Machine category.
+- Manufacturer.
+- Model.
+- Serial number.
+- Production department.
+- Installation date.
+- Current operational status.
+- Maintenance history.
+- Last maintenance date.
+- Next scheduled maintenance date.
+
+Include machine categories such as:
+
+DIAPER PRODUCTION EQUIPMENT:
+
+- Core forming unit.
+- SAP applicator.
+- Elastic applicator.
+- Frontal tape unit.
+- Side tape unit.
+- Cutting unit.
+- Folding unit.
+
+SUPPORTING EQUIPMENT:
+
+- Packaging machines.
+- Air compressors.
+- Air dryers.
+- Power generators.
+
+Allow administrators to register additional machines.
+
+Each machine must have its own historical record containing incidents, maintenance, downtime and servicing activities.
+
+==================================================
+8. ELECTRICAL MAINTENANCE MANAGEMENT
+==================================================
+
+This is an important module.
+
+Build it around the actual electrical maintenance workflow in a manufacturing factory.
+
+FAULT REPORTING:
+
+Allow operators and supervisors to report electrical faults.
+
+Information required:
+
+- Machine name.
+- Machine ID.
+- Fault category.
+- Fault description.
+- Date.
+- Time.
+- Reported by.
+- Production shift.
+- Machine alarm information, if available.
+- Severity.
+- Current status.
+
+Example fault categories:
+
+- Photoelectric sensor failure.
+- Proximity sensor failure.
+- Heater failure.
+- Temperature controller failure.
+- Electrical plug failure.
+- Socket failure.
+- Power supply issue.
+- Wiring problem.
+- Other electrical fault.
+
+These categories must be configurable.
+
+MAINTENANCE RECORDS:
+
+Create a digital version of the electrical maintenance logbook.
+
+Record:
+
+- Date.
+- Machine name.
+- Fault description.
+- Action taken.
+- Spare parts used.
+- Downtime duration.
+- Running hours.
+- Servicing hours.
+- Technician responsible.
+- Maintenance start time.
+- Maintenance completion time.
+- Machine restoration time.
+- Additional observations.
+
+Allow technicians to update maintenance records.
+
+MAINTENANCE HISTORY:
+
+Each machine must have a searchable electrical maintenance history.
+
+Users should be able to identify:
+
+- Previous electrical faults.
+- Previous troubleshooting actions.
+- Spare parts previously used.
+- Repeated faults.
+- Maintenance frequency.
+- Downtime history.
+
+SHIFT-END REPORTING:
+
+At the end of each shift, electrical maintenance personnel must be able to generate a maintenance report.
+
+The report should summarize:
+
+- Total faults reported.
+- Faults resolved.
+- Unresolved faults.
+- Maintenance activities.
+- Spare parts used.
+- Total downtime.
+- Running hours.
+- Servicing hours.
+- Important observations.
+
+Allow the technician to submit the report to the Maintenance Head.
+
+The Maintenance Head should have a dashboard showing submitted reports and reports awaiting submission.
+
+==================================================
+9. MECHANICAL MAINTENANCE
+==================================================
+
+Create a separate mechanical maintenance module.
+
+Allow authorized staff to:
+
+- Report mechanical faults.
+- Record troubleshooting activities.
+- Record parts replaced.
+- Schedule preventive maintenance.
+- Track machine servicing.
+- Document completed repairs.
+- Record machine downtime.
+
+Use a structure similar to electrical maintenance while maintaining separate departmental records.
+
+==================================================
+10. PREVENTIVE MAINTENANCE
+==================================================
+
+Create a preventive maintenance scheduling system.
+
+Allow authorized personnel to schedule maintenance based on:
+
+- Daily intervals.
+- Weekly intervals.
+- Monthly intervals.
+- Custom intervals.
+- Machine running hours.
+
+Features:
+
+- Maintenance calendar.
+- Upcoming maintenance.
+- Overdue maintenance.
+- Assigned technicians.
+- Maintenance checklists.
+- Completed maintenance records.
+- Service history.
+
+Send notifications when maintenance is approaching or overdue.
+
+Do not automatically assume maintenance intervals.
+
+Allow authorized personnel to configure schedules based on approved maintenance procedures and manufacturer recommendations.
+
+==================================================
+11. MACHINE DOWNTIME TRACKING
+==================================================
+
+Build a dedicated downtime tracking system.
+
+Record:
+
+- Machine.
+- Date.
+- Time stopped.
+- Time reported.
+- Maintenance start time.
+- Time resolved.
+- Time production resumed.
+- Reason for downtime.
+- Department responsible.
+- Technician assigned.
+- Resolution.
+
+Calculate downtime from recorded timestamps.
+
+Include reports showing:
+
+- Total downtime per machine.
+- Total downtime per production line.
+- Downtime by department.
+- Most frequently affected machines.
+- Common causes of downtime.
+- Downtime trends over time.
+
+Clearly distinguish production stoppage time from time spent actively repairing a machine.
+
+==================================================
+12. QUALITY CONTROL
+==================================================
+
+Create a quality control module.
+
+Allow authorized personnel to record:
+
+- Product name.
+- Production line.
+- Inspection date.
+- Batch number.
+- Inspection result.
+- Defective quantity.
+- Defect category.
+- Rejection reason.
+- Inspector.
+- Corrective action.
+
+Maintain historical quality inspection records.
+
+==================================================
+13. SHIFT HANDOVER MANAGEMENT
+==================================================
+
+Create a digital shift handover system for departments.
+
+Every department should be able to submit its own shift report.
+
+Include:
+
+- Department.
+- Shift.
+- Date.
+- Supervisor.
+- Activities completed.
+- Production information.
+- Machine issues.
+- Maintenance activities.
+- Outstanding problems.
+- Unresolved incidents.
+- Materials used.
+- Important observations.
+- Handover notes.
+
+Allow the next shift to view the previous shift's report.
+
+Make unresolved incidents clearly visible.
+
+==================================================
+14. DIGITAL DOCUMENT AND RECORD ARCHIVE
+==================================================
+
+Create a centralized searchable archive.
+
+The system should organize records by:
+
+- Department.
+- Machine.
+- Material.
+- Date.
+- Shift.
+- Employee.
+- Incident category.
+- Production line.
+- Report type.
+
+Allow authorized users to:
+
+- Search records.
+- Filter records.
+- Open historical records.
+- View attachments.
+- Download reports.
+- Export records as CSV or PDF.
+
+Support document attachments such as:
+
+- Maintenance photographs.
+- Inspection documents.
+- Equipment manuals.
+- PDF reports.
+- Relevant technical documents.
+
+Include audit history showing who created or modified each record.
+
+Do not silently overwrite historical information.
+
+==================================================
+15. FACTORY MEMORY AI
+==================================================
+
+This is one of the most important features.
+
+Build an AI-powered assistant called:
+
+FACTORY MEMORY AI
+
+PURPOSE:
+
+Allow authorized factory personnel to retrieve information from the factory database using normal conversational language.
+
+Instead of manually searching through multiple logbooks, workers should be able to ask questions.
+
+EXAMPLE QUESTIONS:
+
+"Show me all electrical faults reported this week."
+
+"When was the last time this machine experienced a sensor failure?"
+
+"Which machine had the highest downtime last month?"
+
+"What action was taken during the previous heater failure?"
+
+"Show me all maintenance activities completed yesterday."
+
+"How many times has this machine broken down this month?"
+
+"Which spare parts were used during the last maintenance?"
+
+"Show me the previous shift's electrical maintenance report."
+
+"What materials were inspected yesterday?"
+
+"What was the recorded thickness of material batch 204?"
+
+"Show me all production records for the previous month."
+
+"Which maintenance reports are still awaiting approval?"
+
+"Summarize the electrical department's activities this week."
+
+AI CAPABILITIES:
+
+1. Natural language search.
+2. Historical record retrieval.
+3. Machine maintenance history.
+4. Material record retrieval.
+5. Production record retrieval.
+6. Report summarization.
+7. Trend identification.
+8. Cross-department information retrieval where permissions allow.
+9. Comparison of historical records.
+10. Identification of missing or incomplete records.
+
+AI RESPONSE REQUIREMENTS:
+
+- Retrieve answers from actual database records.
+- Display the relevant dates and record references.
+- Identify which records support the answer.
+- Never invent missing information.
+- Clearly state when information is unavailable.
+- Distinguish recorded facts from AI-generated observations.
+- Respect user permissions.
+- Never expose another factory's data.
+- Never modify operational records without explicit authorization.
+
+IMPORTANT:
+
+AI must not independently diagnose electrical faults or recommend unsafe electrical procedures.
+
+It must not control machines, change temperature settings, operate electrical equipment, or make safety-critical decisions.
+
+The assistant is an information retrieval and analytical tool.
+
+If a historical event was never recorded or digitized, the AI must not pretend it can recover it.
+
+==================================================
+16. ANALYTICS AND REPORTING
+==================================================
+
+Build an analytics section for factory management.
+
+Include:
+
+PRODUCTION ANALYTICS:
+- Daily output.
+- Monthly output.
+- Production efficiency.
+- Rejected products.
+- Material consumption.
+
+MAINTENANCE ANALYTICS:
+- Electrical faults.
+- Mechanical faults.
+- Preventive maintenance completion.
+- Maintenance frequency.
+- Spare parts usage.
+- Machine downtime.
+
+MATERIAL ANALYTICS:
+- Materials received.
+- Materials consumed.
+- Material wastage.
+- Inventory levels.
+- Material inspection results.
+
+QUALITY ANALYTICS:
+- Defect frequency.
+- Rejected quantities.
+- Product quality trends.
+
+Allow date-based comparisons.
+
+Allow report exports in PDF and CSV formats.
+
+==================================================
+17. NOTIFICATIONS
+==================================================
+
+Create a notification center.
+
+Notifications should include:
+
+- New machine fault.
+- Unresolved incident.
+- Maintenance overdue.
+- Maintenance due soon.
+- Low material inventory.
+- Pending shift report.
+- Report submitted to Maintenance Head.
+- Production target not achieved.
+- New maintenance assignment.
+
+Allow users to mark notifications as read.
+
+==================================================
+18. ADMINISTRATION AND AUDIT LOGS
+==================================================
+
+Create an administration dashboard.
+
+Allow authorized administrators to:
+
+- Register departments.
+- Register machines.
+- Register materials.
+- Add products.
+- Create user accounts.
+- Assign user roles.
+- Configure permissions.
+- Configure notification settings.
+- Manage factory information.
+
+Create an audit log.
+
+Record:
+
+- User.
+- Action.
+- Record affected.
+- Previous value where appropriate.
+- New value where appropriate.
+- Date and time.
+
+Important records should not be permanently deleted through ordinary user actions.
+
+Use archival or soft deletion where appropriate.
+
+==================================================
+19. DATABASE ARCHITECTURE
+==================================================
+
+Design a proper relational PostgreSQL database.
+
+Create appropriate tables for:
+
+- Companies.
+- Factories.
+- Departments.
+- Users.
+- Roles.
+- Permissions.
+- Machines.
+- Machine categories.
+- Materials.
+- Material batches.
+- Material inspections.
+- Material movements.
+- Products.
+- Production records.
+- Production shifts.
+- Machine incidents.
+- Electrical maintenance records.
+- Mechanical maintenance records.
+- Preventive maintenance schedules.
+- Spare parts.
+- Spare parts usage.
+- Downtime records.
+- Quality inspections.
+- Shift reports.
+- Notifications.
+- Document attachments.
+- Audit logs.
+
+Use appropriate:
+
+- Primary keys.
+- Foreign keys.
+- Indexes.
+- Constraints.
+- Timestamps.
+- Data validation.
+
+Design the database to support multiple factories and multiple companies.
+
+Every company's records must be isolated.
+
+Use Supabase Row Level Security policies to enforce access restrictions.
+
+Do not rely on frontend filtering for data security.
+
+==================================================
+20. USER INTERFACE
+==================================================
+
+Create a premium industrial enterprise interface.
+
+Design direction:
+
+- Dark navy sidebar.
+- White main workspace.
+- Light gray backgrounds.
+- Blue accent colors.
+- Professional typography.
+- Modern tables.
+- Clear charts.
+- Organized forms.
+- Minimal animations.
+- Consistent spacing.
+
+The interface should feel like serious industrial management software.
+
+MAIN NAVIGATION:
+
+1. Overview.
+2. Production.
+3. Materials.
+4. Machines.
+5. Machine Incidents.
+6. Electrical Maintenance.
+7. Mechanical Maintenance.
+8. Preventive Maintenance.
+9. Downtime.
+10. Quality Control.
+11. Shift Reports.
+12. Document Archive.
+13. Factory Memory AI.
+14. Analytics.
+15. Notifications.
+16. User Management.
+17. Settings.
+
+Display navigation items according to user permissions.
+
+==================================================
+21. PWA AND MOBILE EXPERIENCE
+==================================================
+
+Build the application as a Progressive Web App.
+
+It must work on:
+
+- Desktop computers.
+- Windows laptops.
+- Android smartphones.
+- iPhones.
+- Tablets.
+
+Include:
+
+- Installable application.
+- Application icon.
+- Responsive layouts.
+- Mobile-friendly forms.
+- Touch-friendly navigation.
+- Mobile notifications where supported.
+
+Design an offline-ready architecture.
+
+For future offline functionality:
+
+- Allow approved forms to be saved locally.
+- Queue records for synchronization.
+- Prevent duplicate submissions.
+- Detect synchronization conflicts.
+- Clearly show synchronization status.
+
+Do not claim that offline synchronization works until it has been implemented and tested.
+
+==================================================
+22. DATA IMPORT AND DIGITALIZATION
+==================================================
+
+Factories may already have years of handwritten records.
+
+Create an architecture that can eventually support digitizing historical records.
+
+Include:
+
+- CSV import.
+- Excel import.
+- PDF document upload.
+- Image attachment.
+- Structured data entry.
+
+Plan a future AI document processing feature that can extract information from uploaded logbook scans and documents.
+
+The extracted information must be reviewed and confirmed by an authorized human before becoming an official operational record.
+
+Preserve the original uploaded document.
+
+==================================================
+23. SECURITY AND RELIABILITY
+==================================================
+
+Implement:
+
+- Secure authentication.
+- Role-based access control.
+- Row Level Security.
+- Company data isolation.
+- Secure file storage.
+- Audit trails.
+- Input validation.
+- Error handling.
+- Database backups.
+- Secure API handling.
+- Session management.
+
+Do not expose sensitive company information to unauthorized users.
+
+Do not use fictional data as real factory data.
+
+Clearly distinguish sample data from verified operational records.
+
+==================================================
+24. DEVELOPMENT REQUIREMENTS
+==================================================
+
+Build the application in a structured and maintainable way.
+
+Do not attempt to put the entire application into one giant component.
+
+Use reusable components.
+
+Separate:
+
+- Frontend.
+- Backend services.
+- Database queries.
+- Authentication.
+- AI services.
+- Business logic.
+- UI components.
+
+Create database migrations.
+
+Provide an environment variable template.
+
+Document the installation process.
+
+Create a README explaining how to run the project.
+
+Include proper loading states, empty states, validation messages and error handling.
+
+Build real CRUD functionality.
+
+Do not create buttons that only look functional.
+
+Do not hardcode dashboard statistics when real database queries should supply them.
+
+==================================================
+25. FINAL PRODUCT EXPERIENCE
+==================================================
+
+Factory Memory OS should feel like an enterprise platform that a real manufacturing company could eventually deploy.
+
+A factory employee should be able to:
+
+1. Sign in.
+2. Access their department.
+3. Record operational activities.
+4. Submit reports.
+5. Retrieve previous records.
+6. Track machines and materials.
+7. Search historical information through AI.
+
+A supervisor should be able to monitor operations.
+
+A Maintenance Head should be able to review maintenance reports.
+
+A factory manager should be able to understand operational performance.
+
+An authorized employee should be able to ask Factory Memory AI a question and retrieve relevant historical records without manually searching through multiple notebooks.
+
+FINAL INSTRUCTION:
+
+Build the actual application.
+
+Start with the complete project architecture, database structure, authentication, navigation and core operational workflows.
+
+Prioritize data integrity, usability, security and reliable record retrieval.
+
+Do not sacrifice functionality for visual appearance.
+
+The product must be designed for eventual deployment in real manufacturing environments, beginning with a carefully controlled factory pilot.
+
+PRODUCT NAME: FACTORY MEMORY OS.
+
+TAGLINE: THE DIGITAL MEMORY OF MANUFACTURING.

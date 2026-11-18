@@ -1,0 +1,556 @@
+{
+  "entities": {
+    "UserPrivateProfile": {
+      "title": "UserPrivateProfile",
+      "description": "Isolated PII profile for an authenticated factory user",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128 },
+        "email": { "type": "string", "format": "email", "maxLength": 200 },
+        "displayName": { "type": "string", "maxLength": 120 },
+        "defaultFactoryId": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "displayName", "createdAt", "updatedAt"]
+    },
+    "Factory": {
+      "title": "Factory",
+      "description": "Manufacturing plant tenant configuration and departments",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 160 },
+        "companyName": { "type": "string", "maxLength": 160 },
+        "location": { "type": "string", "maxLength": 160 },
+        "ownerId": { "type": "string", "maxLength": 128 },
+        "accessUids": { "type": "array" },
+        "departments": { "type": "array" },
+        "faultCategories": { "type": "array" },
+        "materialUnits": { "type": "array" },
+        "shifts": { "type": "array" },
+        "hasSampleData": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "name", "companyName", "ownerId", "accessUids", "createdAt", "updatedAt"]
+    },
+    "FactoryMember": {
+      "title": "FactoryMember",
+      "description": "Personnel role and department assignment within a factory (no PII)",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128 },
+        "factoryId": { "type": "string", "maxLength": 128 },
+        "factoryOwnerUid": { "type": "string", "maxLength": 128 },
+        "accessUids": { "type": "array" },
+        "displayName": { "type": "string", "maxLength": 120 },
+        "employeeCode": { "type": "string", "maxLength": 40 },
+        "role": { "type": "string", "maxLength": 64 },
+        "department": { "type": "string", "maxLength": 80 },
+        "isMaintenanceHead": { "type": "boolean" },
+        "active": { "type": "boolean" },
+        "createdByUid": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "factoryId", "factoryOwnerUid", "displayName", "role", "department", "active", "createdByUid", "createdAt", "updatedAt"]
+    },
+    "Material": {
+      "title": "Material",
+      "description": "Raw material batch registered in inventory",
+      "type": "object",
+      "properties": {
+        "factoryId": { "type": "string", "maxLength": 128 },
+        "factoryOwnerUid": { "type": "string", "maxLength": 128 },
+        "accessUids": { "type": "array" },
+        "materialCode": { "type": "string", "maxLength": 64 },
+        "name": { "type": "string", "maxLength": 160 },
+        "category": { "type": "string", "maxLength": 80 },
+        "supplier": { "type": "string", "maxLength": 160 },
+        "batchNumber": { "type": "string", "maxLength": 80 },
+        "expectedWidthMm": { "type": "number" },
+        "expectedThicknessMm": { "type": "number" },
+        "expectedWeightKg": { "type": "number" },
+        "quantity": { "type": "number" },
+        "remainingQty": { "type": "number" },
+        "consumedQty": { "type": "number" },
+        "wastedQty": { "type": "number" },
+        "minThreshold": { "type": "number" },
+        "unit": { "type": "string", "maxLength": 32 },
+        "dateReceived": { "type": "string", "maxLength": 32 },
+        "storageLocation": { "type": "string", "maxLength": 120 },
+        "status": { "type": "string", "enum": ["pending_inspection", "approved", "rejected", "in_production", "depleted", "archived"] },
+        "notes": { "type": "string", "maxLength": 1000 },
+        "recordOrigin": { "type": "string", "enum": ["operational", "sample"] },
+        "createdByUid": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["factoryId", "factoryOwnerUid", "materialCode", "name", "category", "batchNumber", "quantity", "remainingQty", "unit", "status", "recordOrigin", "createdByUid", "createdAt", "updatedAt"]
+    },
+    "MaterialInspection": {
+      "title": "MaterialInspection",
+      "description": "Incoming material physical measurement check",
+      "type": "object",
+      "properties": {
+        "factoryId": { "type": "string", "maxLength": 128 },
+        "factoryOwnerUid": { "type": "string", "maxLength": 128 },
+        "accessUids": { "type": "array" },
+        "materialId": { "type": "string", "maxLength": 128 },
+        "materialCode": { "type": "string", "maxLength": 64 },
+        "materialName": { "type": "string", "maxLength": 160 },
+        "batchNumber": { "type": "string", "maxLength": 80 },
+        "expectedWidthMm": { "type": "number" },
+        "actualWidthMm": { "type": "number" },
+        "expectedThicknessMm": { "type": "number" },
+        "actualThicknessMm": { "type": "number" },
+        "expectedWeightKg": { "type": "number" },
+        "actualWeightKg": { "type": "number" },
+        "inspectionDate": { "type": "string", "maxLength": 32 },
+        "inspectorName": { "type": "string", "maxLength": 120 },
+        "result": { "type": "string", "enum": ["approved", "rejected", "conditional"] },
+        "comments": { "type": "string", "maxLength": 1000 },
+        "recordOrigin": { "type": "string", "enum": ["operational", "sample"] },
+        "createdByUid": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["factoryId", "factoryOwnerUid", "materialId", "materialCode", "batchNumber", "actualWidthMm", "actualThicknessMm", "actualWeightKg", "inspectionDate", "inspectorName", "result", "recordOrigin", "createdByUid", "createdAt", "updatedAt"]
+    },
+    "MaterialMovement": {
+      "title": "MaterialMovement",
+      "description": "Material receipt, issuance, consumption, or waste ledger entry",
+      "type": "object",
+      "properties": {
+        "factoryId": { "type": "string", "maxLength": 128 },
+        "factoryOwnerUid": { "type": "string", "maxLength": 128 },
+        "accessUids": { "type": "array" },
+        "materialId": { "type": "string", "maxLength": 128 },
+        "materialCode": { "type": "string", "maxLength": 64 },
+        "materialName": { "type": "string", "maxLength": 160 },
+        "batchNumber": { "type": "string", "maxLength": 80 },
+        "movementType": { "type": "string", "enum": ["received", "issued", "consumed", "wasted", "returned"] },
+        "quantity": { "type": "number" },
+        "unit": { "type": "string", "maxLength": 32 },
+        "productionLine": { "type": "string", "maxLength": 80 },
+        "recordedByName": { "type": "string", "maxLength": 120 },
+        "movementDate": { "type": "string", "maxLength": 32 },
+        "notes": { "type": "string", "maxLength": 500 },
+        "recordOrigin": { "type": "string", "enum": ["operational", "sample"] },
+        "createdByUid": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["factoryId", "factoryOwnerUid", "materialId", "movementType", "quantity", "unit", "movementDate", "recordOrigin", "createdByUid", "createdAt", "updatedAt"]
+    },
+    "Machine": {
+      "title": "Machine",
+      "description": "Factory machine asset register entry",
+      "type": "object",
+      "properties": {
+        "factoryId": { "type": "string", "maxLength": 128 },
+        "factoryOwnerUid": { "type": "string", "maxLength": 128 },
+        "accessUids": { "type": "array" },
+        "machineCode": { "type": "string", "maxLength": 64 },
+        "name": { "type": "string", "maxLength": 160 },
+        "category": { "type": "string", "maxLength": 80 },
+        "equipmentGroup": { "type": "string", "enum": ["diaper_production", "supporting_equipment"] },
+        "manufacturer": { "type": "string", "maxLength": 120 },
+        "model": { "type": "string", "maxLength": 120 },
+        "serialNumber": { "type": "string", "maxLength": 120 },
+        "department": { "type": "string", "maxLength": 80 },
+        "productionLine": { "type": "string", "maxLength": 80 },
+        "installationDate": { "type": "string", "maxLength": 32 },
+        "status": { "type": "string", "enum": ["running", "stopped", "maintenance", "standby", "archived"] },
+        "runningHours": { "type": "number" },
+        "lastMaintenanceDate": { "type": "string", "maxLength": 32 },
+        "nextMaintenanceDate": { "type": "string", "maxLength": 32 },
+        "recordOrigin": { "type": "string", "enum": ["operational", "sample"] },
+        "createdByUid": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["factoryId", "factoryOwnerUid", "machineCode", "name", "category", "department", "status", "recordOrigin", "createdByUid", "createdAt", "updatedAt"]
+    },
+    "ProductionRecord": {
+      "title": "ProductionRecord",
+      "description": "Shift production output, targets, waste, and material usage",
+      "type": "object",
+      "properties": {
+        "factoryId": { "type": "string", "maxLength": 128 },
+        "factoryOwnerUid": { "type": "string", "maxLength": 128 },
+        "accessUids": { "type": "array" },
+        "productionDate": { "type": "string", "maxLength": 32 },
+        "productName": { "type": "string", "maxLength": 160 },
+        "productionLine": { "type": "string", "maxLength": 80 },
+        "machineId": { "type": "string", "maxLength": 128 },
+        "machineName": { "type": "string", "maxLength": 160 },
+        "shift": { "type": "string", "maxLength": 32 },
+        "targetQty": { "type": "number" },
+        "actualQty": { "type": "number" },
+        "rejectedQty": { "type": "number" },
+        "materialsConsumed": { "type": "string", "maxLength": 500 },
+        "startTime": { "type": "string", "maxLength": 16 },
+        "endTime": { "type": "string", "maxLength": 16 },
+        "supervisorName": { "type": "string", "maxLength": 120 },
+        "operatorName": { "type": "string", "maxLength": 120 },
+        "notes": { "type": "string", "maxLength": 1000 },
+        "recordOrigin": { "type": "string", "enum": ["operational", "sample"] },
+        "createdByUid": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["factoryId", "factoryOwnerUid", "productionDate", "productName", "productionLine", "machineName", "shift", "targetQty", "actualQty", "rejectedQty", "recordOrigin", "createdByUid", "createdAt", "updatedAt"]
+    },
+    "MachineIncident": {
+      "title": "MachineIncident",
+      "description": "Reported electrical, mechanical, or operational breakdown",
+      "type": "object",
+      "properties": {
+        "factoryId": { "type": "string", "maxLength": 128 },
+        "factoryOwnerUid": { "type": "string", "maxLength": 128 },
+        "accessUids": { "type": "array" },
+        "incidentCode": { "type": "string", "maxLength": 64 },
+        "machineId": { "type": "string", "maxLength": 128 },
+        "machineCode": { "type": "string", "maxLength": 64 },
+        "machineName": { "type": "string", "maxLength": 160 },
+        "department": { "type": "string", "enum": ["electrical", "mechanical", "operational"] },
+        "faultCategory": { "type": "string", "maxLength": 120 },
+        "description": { "type": "string", "maxLength": 1500 },
+        "alarmInfo": { "type": "string", "maxLength": 240 },
+        "reportedDate": { "type": "string", "maxLength": 32 },
+        "reportedTime": { "type": "string", "maxLength": 16 },
+        "reportedByName": { "type": "string", "maxLength": 120 },
+        "shift": { "type": "string", "maxLength": 32 },
+        "severity": { "type": "string", "enum": ["low", "medium", "high", "critical"] },
+        "status": { "type": "string", "enum": ["open", "in_progress", "resolved"] },
+        "recordOrigin": { "type": "string", "enum": ["operational", "sample"] },
+        "createdByUid": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["factoryId", "factoryOwnerUid", "machineId", "machineName", "department", "faultCategory", "description", "reportedDate", "reportedTime", "severity", "status", "recordOrigin", "createdByUid", "createdAt", "updatedAt"]
+    },
+    "MaintenanceRecord": {
+      "title": "MaintenanceRecord",
+      "description": "Electrical or mechanical maintenance logbook entry",
+      "type": "object",
+      "properties": {
+        "factoryId": { "type": "string", "maxLength": 128 },
+        "factoryOwnerUid": { "type": "string", "maxLength": 128 },
+        "accessUids": { "type": "array" },
+        "discipline": { "type": "string", "enum": ["electrical", "mechanical"] },
+        "recordDate": { "type": "string", "maxLength": 32 },
+        "machineId": { "type": "string", "maxLength": 128 },
+        "machineCode": { "type": "string", "maxLength": 64 },
+        "machineName": { "type": "string", "maxLength": 160 },
+        "incidentId": { "type": "string", "maxLength": 128 },
+        "faultCategory": { "type": "string", "maxLength": 120 },
+        "faultDescription": { "type": "string", "maxLength": 1500 },
+        "actionTaken": { "type": "string", "maxLength": 1500 },
+        "sparePartsUsed": { "type": "string", "maxLength": 500 },
+        "downtimeMinutes": { "type": "number" },
+        "runningHours": { "type": "number" },
+        "servicingHours": { "type": "number" },
+        "technicianName": { "type": "string", "maxLength": 120 },
+        "startTime": { "type": "string", "maxLength": 16 },
+        "completionTime": { "type": "string", "maxLength": 16 },
+        "restorationTime": { "type": "string", "maxLength": 16 },
+        "observations": { "type": "string", "maxLength": 1000 },
+        "shift": { "type": "string", "maxLength": 32 },
+        "status": { "type": "string", "enum": ["in_progress", "completed", "awaiting_review", "approved"] },
+        "recordOrigin": { "type": "string", "enum": ["operational", "sample"] },
+        "createdByUid": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["factoryId", "factoryOwnerUid", "discipline", "recordDate", "machineId", "machineName", "faultDescription", "actionTaken", "downtimeMinutes", "technicianName", "status", "recordOrigin", "createdByUid", "createdAt", "updatedAt"]
+    },
+    "PreventiveSchedule": {
+      "title": "PreventiveSchedule",
+      "description": "Preventive maintenance schedule and checklist",
+      "type": "object",
+      "properties": {
+        "factoryId": { "type": "string", "maxLength": 128 },
+        "factoryOwnerUid": { "type": "string", "maxLength": 128 },
+        "accessUids": { "type": "array" },
+        "machineId": { "type": "string", "maxLength": 128 },
+        "machineName": { "type": "string", "maxLength": 160 },
+        "discipline": { "type": "string", "enum": ["electrical", "mechanical"] },
+        "taskTitle": { "type": "string", "maxLength": 200 },
+        "intervalType": { "type": "string", "enum": ["daily", "weekly", "monthly", "custom", "running_hours"] },
+        "intervalValue": { "type": "string", "maxLength": 64 },
+        "assignedTechnician": { "type": "string", "maxLength": 120 },
+        "checklistSummary": { "type": "string", "maxLength": 1000 },
+        "lastCompletedDate": { "type": "string", "maxLength": 32 },
+        "nextDueDate": { "type": "string", "maxLength": 32 },
+        "status": { "type": "string", "enum": ["scheduled", "due_soon", "overdue", "completed"] },
+        "recordOrigin": { "type": "string", "enum": ["operational", "sample"] },
+        "createdByUid": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["factoryId", "factoryOwnerUid", "machineId", "machineName", "taskTitle", "intervalType", "nextDueDate", "status", "recordOrigin", "createdByUid", "createdAt", "updatedAt"]
+    },
+    "SparePart": {
+      "title": "SparePart",
+      "description": "Maintenance spare parts inventory item",
+      "type": "object",
+      "properties": {
+        "factoryId": { "type": "string", "maxLength": 128 },
+        "factoryOwnerUid": { "type": "string", "maxLength": 128 },
+        "accessUids": { "type": "array" },
+        "partCode": { "type": "string", "maxLength": 64 },
+        "name": { "type": "string", "maxLength": 160 },
+        "category": { "type": "string", "enum": ["electrical", "mechanical", "general"] },
+        "stockQty": { "type": "number" },
+        "minStockLevel": { "type": "number" },
+        "unit": { "type": "string", "maxLength": 32 },
+        "location": { "type": "string", "maxLength": 120 },
+        "recordOrigin": { "type": "string", "enum": ["operational", "sample"] },
+        "createdByUid": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["factoryId", "factoryOwnerUid", "partCode", "name", "category", "stockQty", "minStockLevel", "unit", "recordOrigin", "createdByUid", "createdAt", "updatedAt"]
+    },
+    "DowntimeRecord": {
+      "title": "DowntimeRecord",
+      "description": "Detailed machine stoppage vs active repair duration record",
+      "type": "object",
+      "properties": {
+        "factoryId": { "type": "string", "maxLength": 128 },
+        "factoryOwnerUid": { "type": "string", "maxLength": 128 },
+        "accessUids": { "type": "array" },
+        "machineId": { "type": "string", "maxLength": 128 },
+        "machineName": { "type": "string", "maxLength": 160 },
+        "productionLine": { "type": "string", "maxLength": 80 },
+        "date": { "type": "string", "maxLength": 32 },
+        "timeStopped": { "type": "string", "maxLength": 16 },
+        "timeReported": { "type": "string", "maxLength": 16 },
+        "maintenanceStartTime": { "type": "string", "maxLength": 16 },
+        "timeResolved": { "type": "string", "maxLength": 16 },
+        "timeProductionResumed": { "type": "string", "maxLength": 16 },
+        "totalStoppageMinutes": { "type": "number" },
+        "activeRepairMinutes": { "type": "number" },
+        "reason": { "type": "string", "maxLength": 500 },
+        "departmentResponsible": { "type": "string", "maxLength": 80 },
+        "technicianAssigned": { "type": "string", "maxLength": 120 },
+        "resolution": { "type": "string", "maxLength": 1000 },
+        "recordOrigin": { "type": "string", "enum": ["operational", "sample"] },
+        "createdByUid": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["factoryId", "factoryOwnerUid", "machineId", "machineName", "date", "timeStopped", "totalStoppageMinutes", "activeRepairMinutes", "reason", "departmentResponsible", "recordOrigin", "createdByUid", "createdAt", "updatedAt"]
+    },
+    "QualityInspection": {
+      "title": "QualityInspection",
+      "description": "Quality control inspection record",
+      "type": "object",
+      "properties": {
+        "factoryId": { "type": "string", "maxLength": 128 },
+        "factoryOwnerUid": { "type": "string", "maxLength": 128 },
+        "accessUids": { "type": "array" },
+        "productName": { "type": "string", "maxLength": 160 },
+        "productionLine": { "type": "string", "maxLength": 80 },
+        "inspectionDate": { "type": "string", "maxLength": 32 },
+        "batchNumber": { "type": "string", "maxLength": 80 },
+        "result": { "type": "string", "enum": ["passed", "hold", "rejected"] },
+        "defectiveQty": { "type": "number" },
+        "defectCategory": { "type": "string", "maxLength": 120 },
+        "rejectionReason": { "type": "string", "maxLength": 500 },
+        "inspectorName": { "type": "string", "maxLength": 120 },
+        "correctiveAction": { "type": "string", "maxLength": 1000 },
+        "recordOrigin": { "type": "string", "enum": ["operational", "sample"] },
+        "createdByUid": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["factoryId", "factoryOwnerUid", "productName", "productionLine", "inspectionDate", "batchNumber", "result", "defectiveQty", "inspectorName", "recordOrigin", "createdByUid", "createdAt", "updatedAt"]
+    },
+    "ShiftReport": {
+      "title": "ShiftReport",
+      "description": "Departmental shift handover or maintenance shift-end report",
+      "type": "object",
+      "properties": {
+        "factoryId": { "type": "string", "maxLength": 128 },
+        "factoryOwnerUid": { "type": "string", "maxLength": 128 },
+        "accessUids": { "type": "array" },
+        "department": { "type": "string", "maxLength": 80 },
+        "reportType": { "type": "string", "enum": ["departmental", "electrical_shift_end", "mechanical_shift_end"] },
+        "shift": { "type": "string", "maxLength": 32 },
+        "reportDate": { "type": "string", "maxLength": 32 },
+        "supervisorName": { "type": "string", "maxLength": 120 },
+        "activitiesCompleted": { "type": "string", "maxLength": 2000 },
+        "productionSummary": { "type": "string", "maxLength": 1000 },
+        "machineIssues": { "type": "string", "maxLength": 1000 },
+        "maintenanceActivities": { "type": "string", "maxLength": 1000 },
+        "outstandingProblems": { "type": "string", "maxLength": 1000 },
+        "unresolvedIncidentsCount": { "type": "number" },
+        "materialsUsed": { "type": "string", "maxLength": 500 },
+        "sparePartsUsed": { "type": "string", "maxLength": 500 },
+        "totalDowntimeMinutes": { "type": "number" },
+        "runningHours": { "type": "number" },
+        "servicingHours": { "type": "number" },
+        "observations": { "type": "string", "maxLength": 1000 },
+        "handoverNotes": { "type": "string", "maxLength": 1000 },
+        "status": { "type": "string", "enum": ["draft", "submitted", "reviewed"] },
+        "reviewedByName": { "type": "string", "maxLength": 120 },
+        "recordOrigin": { "type": "string", "enum": ["operational", "sample"] },
+        "createdByUid": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["factoryId", "factoryOwnerUid", "department", "reportType", "shift", "reportDate", "supervisorName", "activitiesCompleted", "status", "recordOrigin", "createdByUid", "createdAt", "updatedAt"]
+    },
+    "DocumentRecord": {
+      "title": "DocumentRecord",
+      "description": "Archived document, photo metadata, or staged digitization import",
+      "type": "object",
+      "properties": {
+        "factoryId": { "type": "string", "maxLength": 128 },
+        "factoryOwnerUid": { "type": "string", "maxLength": 128 },
+        "accessUids": { "type": "array" },
+        "title": { "type": "string", "maxLength": 200 },
+        "reportType": { "type": "string", "maxLength": 80 },
+        "department": { "type": "string", "maxLength": 80 },
+        "machineName": { "type": "string", "maxLength": 160 },
+        "materialBatch": { "type": "string", "maxLength": 80 },
+        "fileName": { "type": "string", "maxLength": 200 },
+        "fileType": { "type": "string", "enum": ["pdf", "csv", "xlsx", "image", "manual"] },
+        "fileSizeBytes": { "type": "number" },
+        "extractedSummary": { "type": "string", "maxLength": 4000 },
+        "reviewStatus": { "type": "string", "enum": ["verified", "pending_human_review"] },
+        "uploadedByName": { "type": "string", "maxLength": 120 },
+        "uploadedDate": { "type": "string", "maxLength": 32 },
+        "recordOrigin": { "type": "string", "enum": ["operational", "sample"] },
+        "createdByUid": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["factoryId", "factoryOwnerUid", "title", "reportType", "department", "fileName", "fileType", "reviewStatus", "uploadedByName", "uploadedDate", "recordOrigin", "createdByUid", "createdAt", "updatedAt"]
+    },
+    "NotificationItem": {
+      "title": "NotificationItem",
+      "description": "Operational alert or workflow notification",
+      "type": "object",
+      "properties": {
+        "factoryId": { "type": "string", "maxLength": 128 },
+        "factoryOwnerUid": { "type": "string", "maxLength": 128 },
+        "accessUids": { "type": "array" },
+        "type": { "type": "string", "maxLength": 64 },
+        "title": { "type": "string", "maxLength": 160 },
+        "message": { "type": "string", "maxLength": 500 },
+        "severity": { "type": "string", "enum": ["info", "warning", "critical"] },
+        "isRead": { "type": "boolean" },
+        "relatedModule": { "type": "string", "maxLength": 64 },
+        "recordOrigin": { "type": "string", "enum": ["operational", "sample"] },
+        "createdByUid": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["factoryId", "factoryOwnerUid", "type", "title", "message", "severity", "isRead", "recordOrigin", "createdByUid", "createdAt", "updatedAt"]
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "description": "Immutable operational audit trail entry",
+      "type": "object",
+      "properties": {
+        "factoryId": { "type": "string", "maxLength": 128 },
+        "factoryOwnerUid": { "type": "string", "maxLength": 128 },
+        "accessUids": { "type": "array" },
+        "actorUid": { "type": "string", "maxLength": 128 },
+        "actorName": { "type": "string", "maxLength": 120 },
+        "actorRole": { "type": "string", "maxLength": 64 },
+        "action": { "type": "string", "enum": ["create", "update", "archive", "review"] },
+        "entityType": { "type": "string", "maxLength": 64 },
+        "entityId": { "type": "string", "maxLength": 128 },
+        "previousValue": { "type": "string", "maxLength": 1000 },
+        "newValue": { "type": "string", "maxLength": 1000 },
+        "createdByUid": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["factoryId", "factoryOwnerUid", "actorUid", "actorName", "actorRole", "action", "entityType", "entityId", "createdByUid", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}/private/info": {
+      "schema": { "$ref": "#/entities/UserPrivateProfile" },
+      "description": "Private PII profile for each user"
+    },
+    "/factories/{factoryId}": {
+      "schema": { "$ref": "#/entities/Factory" },
+      "description": "Tenant factory root configuration"
+    },
+    "/factories/{factoryId}/members/{memberUid}": {
+      "schema": { "$ref": "#/entities/FactoryMember" },
+      "description": "Personnel role directory for factory"
+    },
+    "/factories/{factoryId}/materials/{materialId}": {
+      "schema": { "$ref": "#/entities/Material" },
+      "description": "Registered material inventory batches"
+    },
+    "/factories/{factoryId}/materialInspections/{inspectionId}": {
+      "schema": { "$ref": "#/entities/MaterialInspection" },
+      "description": "Material quality/dimension inspection logs"
+    },
+    "/factories/{factoryId}/materialMovements/{movementId}": {
+      "schema": { "$ref": "#/entities/MaterialMovement" },
+      "description": "Material receipts, issues, consumption, and wastage"
+    },
+    "/factories/{factoryId}/machines/{machineId}": {
+      "schema": { "$ref": "#/entities/Machine" },
+      "description": "Centralized factory machine register"
+    },
+    "/factories/{factoryId}/productionRecords/{recordId}": {
+      "schema": { "$ref": "#/entities/ProductionRecord" },
+      "description": "Shift production logs"
+    },
+    "/factories/{factoryId}/machineIncidents/{incidentId}": {
+      "schema": { "$ref": "#/entities/MachineIncident" },
+      "description": "Machine breakdown and fault reports"
+    },
+    "/factories/{factoryId}/electricalMaintenance/{recordId}": {
+      "schema": { "$ref": "#/entities/MaintenanceRecord" },
+      "description": "Digital electrical maintenance logbook"
+    },
+    "/factories/{factoryId}/mechanicalMaintenance/{recordId}": {
+      "schema": { "$ref": "#/entities/MaintenanceRecord" },
+      "description": "Digital mechanical maintenance logbook"
+    },
+    "/factories/{factoryId}/preventiveSchedules/{scheduleId}": {
+      "schema": { "$ref": "#/entities/PreventiveSchedule" },
+      "description": "Preventive maintenance calendars and checklists"
+    },
+    "/factories/{factoryId}/spareParts/{partId}": {
+      "schema": { "$ref": "#/entities/SparePart" },
+      "description": "Spare parts inventory"
+    },
+    "/factories/{factoryId}/downtimeRecords/{downtimeId}": {
+      "schema": { "$ref": "#/entities/DowntimeRecord" },
+      "description": "Machine stoppage and active repair downtime tracking"
+    },
+    "/factories/{factoryId}/qualityInspections/{qcId}": {
+      "schema": { "$ref": "#/entities/QualityInspection" },
+      "description": "Finished product quality control inspections"
+    },
+    "/factories/{factoryId}/shiftReports/{reportId}": {
+      "schema": { "$ref": "#/entities/ShiftReport" },
+      "description": "Departmental and maintenance shift handover reports"
+    },
+    "/factories/{factoryId}/documents/{docId}": {
+      "schema": { "$ref": "#/entities/DocumentRecord" },
+      "description": "Digital document archive and import staging"
+    },
+    "/factories/{factoryId}/notifications/{notifId}": {
+      "schema": { "$ref": "#/entities/NotificationItem" },
+      "description": "Operational notifications"
+    },
+    "/factories/{factoryId}/auditLogs/{logId}": {
+      "schema": { "$ref": "#/entities/AuditLog" },
+      "description": "Immutable operational audit logs"
+    }
+  }
+}

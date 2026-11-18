@@ -1,0 +1,1123 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // =========================================================================
+    // GLOBAL HARDENED PRIMITIVES
+    // =========================================================================
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isBootstrappedAdmin() {
+      return isVerifiedUser() && request.auth.token.email == 'nt6592147@gmail.com';
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isBoundedUidList(arr) {
+      return arr is list && arr.size() >= 1 && arr.size() <= 50 && arr[0] is string;
+    }
+
+    function isStringSized(val, maxLen) {
+      return val is string && val.size() <= maxLen;
+    }
+
+    function isNonEmptyString(val, maxLen) {
+      return val is string && val.size() >= 1 && val.size() <= maxLen;
+    }
+
+    // Tenant / Master Gate Helpers (never called inside allow list!)
+    function getFactory(factoryId) {
+      return get(/databases/$(database)/documents/factories/$(factoryId)).data;
+    }
+
+    function factoryExists(factoryId) {
+      return exists(/databases/$(database)/documents/factories/$(factoryId));
+    }
+
+    function isFactoryOwner(factoryId) {
+      return isVerifiedUser() && factoryExists(factoryId) && getFactory(factoryId).ownerId == request.auth.uid;
+    }
+
+    function memberPath(factoryId, uid) {
+      return /databases/$(database)/documents/factories/$(factoryId)/members/$(uid);
+    }
+
+    function isFactoryMember(factoryId) {
+      return isVerifiedUser() && (
+        isBootstrappedAdmin() ||
+        isFactoryOwner(factoryId) ||
+        (exists(memberPath(factoryId, request.auth.uid)) && get(memberPath(factoryId, request.auth.uid)).data.active == true)
+      );
+    }
+
+    function getMemberRole(factoryId) {
+      return exists(memberPath(factoryId, request.auth.uid))
+        ? get(memberPath(factoryId, request.auth.uid)).data.role
+        : (isBootstrappedAdmin() || isFactoryOwner(factoryId) ? 'super_admin' : 'none');
+    }
+
+    function isFactoryAdmin(factoryId) {
+      return isVerifiedUser() && (
+        isBootstrappedAdmin() ||
+        isFactoryOwner(factoryId) ||
+        (isFactoryMember(factoryId) && getMemberRole(factoryId) in ['super_admin', 'factory_admin'])
+      );
+    }
+
+    function isManagementOrAdmin(factoryId) {
+      return isFactoryAdmin(factoryId) || (
+        isFactoryMember(factoryId) && getMemberRole(factoryId) in ['factory_manager', 'production_manager']
+      );
+    }
+
+    function isValidRoleName(role) {
+      return role in [
+        'super_admin',
+        'factory_admin',
+        'factory_manager',
+        'production_manager',
+        'production_supervisor',
+        'electrical_maintenance',
+        'mechanical_maintenance',
+        'material_checker',
+        'storekeeper',
+        'quality_control',
+        'machine_operator'
+      ];
+    }
+
+    function hasValidTenantEnvelope(data, factoryId) {
+      return data.factoryId == factoryId
+        && isNonEmptyString(data.factoryOwnerUid, 128)
+        && isBoundedUidList(data.accessUids)
+        && isNonEmptyString(data.createdByUid, 128)
+        && data.recordOrigin in ['operational', 'sample'];
+    }
+
+    function hasValidListAccess(data) {
+      return isVerifiedUser() && (
+        isBootstrappedAdmin() ||
+        data.factoryOwnerUid == request.auth.uid ||
+        data.createdByUid == request.auth.uid ||
+        (data.accessUids is list && request.auth.uid in data.accessUids)
+      );
+    }
+
+    // Connection validation probe
+    match /test/connection {
+      allow get: if isSignedIn();
+    }
+
+    // =========================================================================
+    // PII ISOLATED USER PROFILES
+    // =========================================================================
+    function isValidUserPrivateProfile(data, userId) {
+      return data.keys().hasAll(['uid', 'email', 'displayName', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'email', 'displayName', 'defaultFactoryId', 'createdAt', 'updatedAt'])
+        && data.uid == userId
+        && isNonEmptyString(data.email, 200)
+        && isNonEmptyString(data.displayName, 120)
+        && (!('defaultFactoryId' in data) || isStringSized(data.defaultFactoryId, 128))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    match /users/{userId}/private/info {
+      allow get: if isVerifiedUser() && isValidId(userId) && (request.auth.uid == userId || isBootstrappedAdmin());
+      allow list: if false;
+      allow create: if isVerifiedUser() && isValidId(userId) && (request.auth.uid == userId || isBootstrappedAdmin())
+        && isValidUserPrivateProfile(incoming(), userId)
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isVerifiedUser() && isValidId(userId) && (request.auth.uid == userId || isBootstrappedAdmin())
+        && isValidUserPrivateProfile(incoming(), userId)
+        && incoming().uid == existing().uid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'defaultFactoryId', 'email', 'updatedAt']);
+      allow delete: if false;
+    }
+
+    // =========================================================================
+    // FACTORY ROOT DOCUMENT
+    // =========================================================================
+    function isValidFactory(data, factoryId) {
+      return data.keys().hasAll(['id', 'name', 'companyName', 'ownerId', 'accessUids', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly([
+          'id', 'name', 'companyName', 'location', 'ownerId', 'accessUids',
+          'departments', 'faultCategories', 'materialUnits', 'shifts', 'hasSampleData',
+          'createdAt', 'updatedAt'
+        ])
+        && data.id == factoryId
+        && isNonEmptyString(data.name, 160)
+        && isNonEmptyString(data.companyName, 160)
+        && (!('location' in data) || isStringSized(data.location, 160))
+        && isNonEmptyString(data.ownerId, 128)
+        && isBoundedUidList(data.accessUids)
+        && (!('departments' in data) || (data.departments is list && data.departments.size() <= 30))
+        && (!('faultCategories' in data) || (data.faultCategories is list && data.faultCategories.size() <= 40))
+        && (!('materialUnits' in data) || (data.materialUnits is list && data.materialUnits.size() <= 20))
+        && (!('shifts' in data) || (data.shifts is list && data.shifts.size() <= 10))
+        && (!('hasSampleData' in data) || data.hasSampleData is bool)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    match /factories/{factoryId} {
+      allow get: if isVerifiedUser() && isValidId(factoryId) && isFactoryMember(factoryId);
+      allow list: if isVerifiedUser() && (
+        isBootstrappedAdmin() ||
+        existing().ownerId == request.auth.uid ||
+        (existing().accessUids is list && request.auth.uid in existing().accessUids)
+      );
+      allow create: if isVerifiedUser() && isValidId(factoryId)
+        && isValidFactory(incoming(), factoryId)
+        && incoming().ownerId == request.auth.uid
+        && request.auth.uid in incoming().accessUids
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isVerifiedUser() && isValidId(factoryId)
+        && isFactoryAdmin(factoryId)
+        && isValidFactory(incoming(), factoryId)
+        && incoming().id == existing().id
+        && incoming().ownerId == existing().ownerId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'name', 'companyName', 'location', 'accessUids', 'departments',
+          'faultCategories', 'materialUnits', 'shifts', 'hasSampleData', 'updatedAt'
+        ]);
+      allow delete: if false;
+
+      // =======================================================================
+      // FACTORY MEMBERS (RBAC DIRECTORY)
+      // =======================================================================
+      function isValidMember(data) {
+        return data.keys().hasAll([
+            'uid', 'factoryId', 'factoryOwnerUid', 'accessUids', 'displayName',
+            'role', 'department', 'active', 'createdByUid', 'createdAt', 'updatedAt'
+          ])
+          && data.keys().hasOnly([
+            'uid', 'factoryId', 'factoryOwnerUid', 'accessUids', 'displayName',
+            'employeeCode', 'role', 'department', 'isMaintenanceHead', 'active',
+            'createdByUid', 'createdAt', 'updatedAt'
+          ])
+          && data.factoryId == factoryId
+          && isNonEmptyString(data.uid, 128)
+          && isNonEmptyString(data.factoryOwnerUid, 128)
+          && isBoundedUidList(data.accessUids)
+          && isNonEmptyString(data.displayName, 120)
+          && (!('employeeCode' in data) || isStringSized(data.employeeCode, 40))
+          && isValidRoleName(data.role)
+          && isNonEmptyString(data.department, 80)
+          && (!('isMaintenanceHead' in data) || data.isMaintenanceHead is bool)
+          && data.active is bool
+          && isNonEmptyString(data.createdByUid, 128)
+          && data.createdAt is timestamp
+          && data.updatedAt is timestamp;
+      }
+
+      match /members/{memberUid} {
+        allow get: if isVerifiedUser() && isValidId(memberUid) && isFactoryMember(factoryId);
+        allow list: if hasValidListAccess(existing());
+        allow create: if isVerifiedUser() && isValidId(memberUid)
+          && isValidMember(incoming())
+          && incoming().uid == memberUid
+          && incoming().createdByUid == request.auth.uid
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time
+          && (
+            isFactoryAdmin(factoryId) ||
+            (isFactoryOwner(factoryId) && memberUid == request.auth.uid)
+          );
+        allow update: if isVerifiedUser() && isValidId(memberUid)
+          && isFactoryAdmin(factoryId)
+          && isValidMember(incoming())
+          && incoming().uid == existing().uid
+          && incoming().factoryId == existing().factoryId
+          && incoming().factoryOwnerUid == existing().factoryOwnerUid
+          && incoming().createdByUid == existing().createdByUid
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && incoming().diff(existing()).affectedKeys().hasOnly([
+            'displayName', 'employeeCode', 'role', 'department',
+            'isMaintenanceHead', 'active', 'accessUids', 'updatedAt'
+          ]);
+        allow delete: if false;
+      }
+
+      // =======================================================================
+      // MATERIALS
+      // =======================================================================
+      function isValidMaterial(data) {
+        return data.keys().hasAll([
+            'factoryId', 'factoryOwnerUid', 'accessUids', 'materialCode', 'name',
+            'category', 'batchNumber', 'quantity', 'remainingQty', 'unit',
+            'status', 'recordOrigin', 'createdByUid', 'createdAt', 'updatedAt'
+          ])
+          && data.keys().hasOnly([
+            'factoryId', 'factoryOwnerUid', 'accessUids', 'materialCode', 'name',
+            'category', 'supplier', 'batchNumber', 'expectedWidthMm', 'expectedThicknessMm',
+            'expectedWeightKg', 'quantity', 'remainingQty', 'consumedQty', 'wastedQty',
+            'minThreshold', 'unit', 'dateReceived', 'storageLocation', 'status',
+            'notes', 'recordOrigin', 'createdByUid', 'createdAt', 'updatedAt'
+          ])
+          && hasValidTenantEnvelope(data, factoryId)
+          && isNonEmptyString(data.materialCode, 64)
+          && isNonEmptyString(data.name, 160)
+          && isNonEmptyString(data.category, 80)
+          && (!('supplier' in data) || isStringSized(data.supplier, 160))
+          && isNonEmptyString(data.batchNumber, 80)
+          && (!('expectedWidthMm' in data) || data.expectedWidthMm is number)
+          && (!('expectedThicknessMm' in data) || data.expectedThicknessMm is number)
+          && (!('expectedWeightKg' in data) || data.expectedWeightKg is number)
+          && data.quantity is number && data.quantity >= 0
+          && data.remainingQty is number && data.remainingQty >= 0
+          && (!('consumedQty' in data) || (data.consumedQty is number && data.consumedQty >= 0))
+          && (!('wastedQty' in data) || (data.wastedQty is number && data.wastedQty >= 0))
+          && (!('minThreshold' in data) || (data.minThreshold is number && data.minThreshold >= 0))
+          && isNonEmptyString(data.unit, 32)
+          && (!('dateReceived' in data) || isStringSized(data.dateReceived, 32))
+          && (!('storageLocation' in data) || isStringSized(data.storageLocation, 120))
+          && data.status in ['pending_inspection', 'approved', 'rejected', 'in_production', 'depleted', 'archived']
+          && (!('notes' in data) || isStringSized(data.notes, 1000))
+          && data.createdAt is timestamp
+          && data.updatedAt is timestamp;
+      }
+
+      match /materials/{materialId} {
+        allow get: if isVerifiedUser() && isValidId(materialId) && isFactoryMember(factoryId);
+        allow list: if hasValidListAccess(existing());
+        allow create: if isVerifiedUser() && isValidId(materialId)
+          && isFactoryMember(factoryId)
+          && getMemberRole(factoryId) in ['super_admin', 'factory_admin', 'factory_manager', 'production_manager', 'material_checker', 'storekeeper']
+          && isValidMaterial(incoming())
+          && incoming().createdByUid == request.auth.uid
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time;
+        allow update: if isVerifiedUser() && isValidId(materialId)
+          && isFactoryMember(factoryId)
+          && getMemberRole(factoryId) in ['super_admin', 'factory_admin', 'factory_manager', 'production_manager', 'production_supervisor', 'material_checker', 'storekeeper']
+          && isValidMaterial(incoming())
+          && incoming().factoryId == existing().factoryId
+          && incoming().factoryOwnerUid == existing().factoryOwnerUid
+          && incoming().createdByUid == existing().createdByUid
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && incoming().diff(existing()).affectedKeys().hasOnly([
+            'remainingQty', 'consumedQty', 'wastedQty', 'status', 'storageLocation', 'notes', 'minThreshold', 'updatedAt'
+          ]);
+        allow delete: if false;
+      }
+
+      // =======================================================================
+      // MATERIAL INSPECTIONS
+      // =======================================================================
+      function isValidMaterialInspection(data) {
+        return data.keys().hasAll([
+            'factoryId', 'factoryOwnerUid', 'accessUids', 'materialId', 'materialCode',
+            'batchNumber', 'actualWidthMm', 'actualThicknessMm', 'actualWeightKg',
+            'inspectionDate', 'inspectorName', 'result', 'recordOrigin', 'createdByUid', 'createdAt', 'updatedAt'
+          ])
+          && data.keys().hasOnly([
+            'factoryId', 'factoryOwnerUid', 'accessUids', 'materialId', 'materialCode',
+            'materialName', 'batchNumber', 'expectedWidthMm', 'actualWidthMm',
+            'expectedThicknessMm', 'actualThicknessMm', 'expectedWeightKg', 'actualWeightKg',
+            'inspectionDate', 'inspectorName', 'result', 'comments', 'recordOrigin',
+            'createdByUid', 'createdAt', 'updatedAt'
+          ])
+          && hasValidTenantEnvelope(data, factoryId)
+          && isNonEmptyString(data.materialId, 128)
+          && isNonEmptyString(data.materialCode, 64)
+          && (!('materialName' in data) || isStringSized(data.materialName, 160))
+          && isNonEmptyString(data.batchNumber, 80)
+          && (!('expectedWidthMm' in data) || data.expectedWidthMm is number)
+          && data.actualWidthMm is number
+          && (!('expectedThicknessMm' in data) || data.expectedThicknessMm is number)
+          && data.actualThicknessMm is number
+          && (!('expectedWeightKg' in data) || data.expectedWeightKg is number)
+          && data.actualWeightKg is number
+          && isNonEmptyString(data.inspectionDate, 32)
+          && isNonEmptyString(data.inspectorName, 120)
+          && data.result in ['approved', 'rejected', 'conditional']
+          && (!('comments' in data) || isStringSized(data.comments, 1000))
+          && data.createdAt is timestamp
+          && data.updatedAt is timestamp;
+      }
+
+      match /materialInspections/{inspectionId} {
+        allow get: if isVerifiedUser() && isValidId(inspectionId) && isFactoryMember(factoryId);
+        allow list: if hasValidListAccess(existing());
+        allow create: if isVerifiedUser() && isValidId(inspectionId)
+          && isFactoryMember(factoryId)
+          && getMemberRole(factoryId) in ['super_admin', 'factory_admin', 'factory_manager', 'material_checker', 'quality_control', 'storekeeper']
+          && isValidMaterialInspection(incoming())
+          && incoming().createdByUid == request.auth.uid
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time;
+        allow update: if false;
+        allow delete: if false;
+      }
+
+      // =======================================================================
+      // MATERIAL MOVEMENTS
+      // =======================================================================
+      function isValidMaterialMovement(data) {
+        return data.keys().hasAll([
+            'factoryId', 'factoryOwnerUid', 'accessUids', 'materialId', 'movementType',
+            'quantity', 'unit', 'movementDate', 'recordOrigin', 'createdByUid', 'createdAt', 'updatedAt'
+          ])
+          && data.keys().hasOnly([
+            'factoryId', 'factoryOwnerUid', 'accessUids', 'materialId', 'materialCode',
+            'materialName', 'batchNumber', 'movementType', 'quantity', 'unit',
+            'productionLine', 'recordedByName', 'movementDate', 'notes', 'recordOrigin',
+            'createdByUid', 'createdAt', 'updatedAt'
+          ])
+          && hasValidTenantEnvelope(data, factoryId)
+          && isNonEmptyString(data.materialId, 128)
+          && (!('materialCode' in data) || isStringSized(data.materialCode, 64))
+          && (!('materialName' in data) || isStringSized(data.materialName, 160))
+          && (!('batchNumber' in data) || isStringSized(data.batchNumber, 80))
+          && data.movementType in ['received', 'issued', 'consumed', 'wasted', 'returned']
+          && data.quantity is number && data.quantity > 0
+          && isNonEmptyString(data.unit, 32)
+          && (!('productionLine' in data) || isStringSized(data.productionLine, 80))
+          && (!('recordedByName' in data) || isStringSized(data.recordedByName, 120))
+          && isNonEmptyString(data.movementDate, 32)
+          && (!('notes' in data) || isStringSized(data.notes, 500))
+          && data.createdAt is timestamp
+          && data.updatedAt is timestamp;
+      }
+
+      match /materialMovements/{movementId} {
+        allow get: if isVerifiedUser() && isValidId(movementId) && isFactoryMember(factoryId);
+        allow list: if hasValidListAccess(existing());
+        allow create: if isVerifiedUser() && isValidId(movementId)
+          && isFactoryMember(factoryId)
+          && getMemberRole(factoryId) in ['super_admin', 'factory_admin', 'factory_manager', 'production_manager', 'production_supervisor', 'material_checker', 'storekeeper']
+          && isValidMaterialMovement(incoming())
+          && incoming().createdByUid == request.auth.uid
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time;
+        allow update: if false;
+        allow delete: if false;
+      }
+
+      // =======================================================================
+      // MACHINES
+      // =======================================================================
+      function isValidMachine(data) {
+        return data.keys().hasAll([
+            'factoryId', 'factoryOwnerUid', 'accessUids', 'machineCode', 'name',
+            'category', 'department', 'status', 'recordOrigin', 'createdByUid', 'createdAt', 'updatedAt'
+          ])
+          && data.keys().hasOnly([
+            'factoryId', 'factoryOwnerUid', 'accessUids', 'machineCode', 'name',
+            'category', 'equipmentGroup', 'manufacturer', 'model', 'serialNumber',
+            'department', 'productionLine', 'installationDate', 'status',
+            'runningHours', 'lastMaintenanceDate', 'nextMaintenanceDate', 'recordOrigin',
+            'createdByUid', 'createdAt', 'updatedAt'
+          ])
+          && hasValidTenantEnvelope(data, factoryId)
+          && isNonEmptyString(data.machineCode, 64)
+          && isNonEmptyString(data.name, 160)
+          && isNonEmptyString(data.category, 80)
+          && (!('equipmentGroup' in data) || data.equipmentGroup in ['diaper_production', 'supporting_equipment'])
+          && (!('manufacturer' in data) || isStringSized(data.manufacturer, 120))
+          && (!('model' in data) || isStringSized(data.model, 120))
+          && (!('serialNumber' in data) || isStringSized(data.serialNumber, 120))
+          && isNonEmptyString(data.department, 80)
+          && (!('productionLine' in data) || isStringSized(data.productionLine, 80))
+          && (!('installationDate' in data) || isStringSized(data.installationDate, 32))
+          && data.status in ['running', 'stopped', 'maintenance', 'standby', 'archived']
+          && (!('runningHours' in data) || (data.runningHours is number && data.runningHours >= 0))
+          && (!('lastMaintenanceDate' in data) || isStringSized(data.lastMaintenanceDate, 32))
+          && (!('nextMaintenanceDate' in data) || isStringSized(data.nextMaintenanceDate, 32))
+          && data.createdAt is timestamp
+          && data.updatedAt is timestamp;
+      }
+
+      match /machines/{machineId} {
+        allow get: if isVerifiedUser() && isValidId(machineId) && isFactoryMember(factoryId);
+        allow list: if hasValidListAccess(existing());
+        allow create: if isVerifiedUser() && isValidId(machineId)
+          && isFactoryAdmin(factoryId)
+          && isValidMachine(incoming())
+          && incoming().createdByUid == request.auth.uid
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time;
+        allow update: if isVerifiedUser() && isValidId(machineId)
+          && isFactoryMember(factoryId)
+          && isValidMachine(incoming())
+          && incoming().factoryId == existing().factoryId
+          && incoming().factoryOwnerUid == existing().factoryOwnerUid
+          && incoming().createdByUid == existing().createdByUid
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && (
+            isFactoryAdmin(factoryId) ||
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'status', 'runningHours', 'lastMaintenanceDate', 'nextMaintenanceDate', 'updatedAt'
+            ])
+          );
+        allow delete: if false;
+      }
+
+      // =======================================================================
+      // PRODUCTION RECORDS
+      // =======================================================================
+      function isValidProductionRecord(data) {
+        return data.keys().hasAll([
+            'factoryId', 'factoryOwnerUid', 'accessUids', 'productionDate', 'productName',
+            'productionLine', 'machineName', 'shift', 'targetQty', 'actualQty', 'rejectedQty',
+            'recordOrigin', 'createdByUid', 'createdAt', 'updatedAt'
+          ])
+          && data.keys().hasOnly([
+            'factoryId', 'factoryOwnerUid', 'accessUids', 'productionDate', 'productName',
+            'productionLine', 'machineId', 'machineName', 'shift', 'targetQty', 'actualQty',
+            'rejectedQty', 'materialsConsumed', 'startTime', 'endTime', 'supervisorName',
+            'operatorName', 'notes', 'recordOrigin', 'createdByUid', 'createdAt', 'updatedAt'
+          ])
+          && hasValidTenantEnvelope(data, factoryId)
+          && isNonEmptyString(data.productionDate, 32)
+          && isNonEmptyString(data.productName, 160)
+          && isNonEmptyString(data.productionLine, 80)
+          && (!('machineId' in data) || isStringSized(data.machineId, 128))
+          && isNonEmptyString(data.machineName, 160)
+          && isNonEmptyString(data.shift, 32)
+          && data.targetQty is number && data.targetQty >= 0
+          && data.actualQty is number && data.actualQty >= 0
+          && data.rejectedQty is number && data.rejectedQty >= 0
+          && (!('materialsConsumed' in data) || isStringSized(data.materialsConsumed, 500))
+          && (!('startTime' in data) || isStringSized(data.startTime, 16))
+          && (!('endTime' in data) || isStringSized(data.endTime, 16))
+          && (!('supervisorName' in data) || isStringSized(data.supervisorName, 120))
+          && (!('operatorName' in data) || isStringSized(data.operatorName, 120))
+          && (!('notes' in data) || isStringSized(data.notes, 1000))
+          && data.createdAt is timestamp
+          && data.updatedAt is timestamp;
+      }
+
+      match /productionRecords/{recordId} {
+        allow get: if isVerifiedUser() && isValidId(recordId) && isFactoryMember(factoryId);
+        allow list: if hasValidListAccess(existing());
+        allow create: if isVerifiedUser() && isValidId(recordId)
+          && isFactoryMember(factoryId)
+          && getMemberRole(factoryId) in ['super_admin', 'factory_admin', 'factory_manager', 'production_manager', 'production_supervisor', 'machine_operator']
+          && isValidProductionRecord(incoming())
+          && incoming().createdByUid == request.auth.uid
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time;
+        allow update: if isVerifiedUser() && isValidId(recordId)
+          && isManagementOrAdmin(factoryId)
+          && isValidProductionRecord(incoming())
+          && incoming().factoryId == existing().factoryId
+          && incoming().factoryOwnerUid == existing().factoryOwnerUid
+          && incoming().createdByUid == existing().createdByUid
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && incoming().diff(existing()).affectedKeys().hasOnly([
+            'targetQty', 'actualQty', 'rejectedQty', 'materialsConsumed', 'notes', 'updatedAt'
+          ]);
+        allow delete: if false;
+      }
+
+      // =======================================================================
+      // MACHINE INCIDENTS
+      // =======================================================================
+      function isValidIncident(data) {
+        return data.keys().hasAll([
+            'factoryId', 'factoryOwnerUid', 'accessUids', 'machineId', 'machineName',
+            'department', 'faultCategory', 'description', 'reportedDate', 'reportedTime',
+            'severity', 'status', 'recordOrigin', 'createdByUid', 'createdAt', 'updatedAt'
+          ])
+          && data.keys().hasOnly([
+            'factoryId', 'factoryOwnerUid', 'accessUids', 'incidentCode', 'machineId',
+            'machineCode', 'machineName', 'department', 'faultCategory', 'description',
+            'alarmInfo', 'reportedDate', 'reportedTime', 'reportedByName', 'shift',
+            'severity', 'status', 'recordOrigin', 'createdByUid', 'createdAt', 'updatedAt'
+          ])
+          && hasValidTenantEnvelope(data, factoryId)
+          && (!('incidentCode' in data) || isStringSized(data.incidentCode, 64))
+          && isNonEmptyString(data.machineId, 128)
+          && (!('machineCode' in data) || isStringSized(data.machineCode, 64))
+          && isNonEmptyString(data.machineName, 160)
+          && data.department in ['electrical', 'mechanical', 'operational']
+          && isNonEmptyString(data.faultCategory, 120)
+          && isNonEmptyString(data.description, 1500)
+          && (!('alarmInfo' in data) || isStringSized(data.alarmInfo, 240))
+          && isNonEmptyString(data.reportedDate, 32)
+          && isNonEmptyString(data.reportedTime, 16)
+          && (!('reportedByName' in data) || isStringSized(data.reportedByName, 120))
+          && (!('shift' in data) || isStringSized(data.shift, 32))
+          && data.severity in ['low', 'medium', 'high', 'critical']
+          && data.status in ['open', 'in_progress', 'resolved']
+          && data.createdAt is timestamp
+          && data.updatedAt is timestamp;
+      }
+
+      match /machineIncidents/{incidentId} {
+        allow get: if isVerifiedUser() && isValidId(incidentId) && isFactoryMember(factoryId);
+        allow list: if hasValidListAccess(existing());
+        allow create: if isVerifiedUser() && isValidId(incidentId)
+          && isFactoryMember(factoryId)
+          && isValidIncident(incoming())
+          && incoming().createdByUid == request.auth.uid
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time;
+        allow update: if isVerifiedUser() && isValidId(incidentId)
+          && isFactoryMember(factoryId)
+          && existing().status != 'resolved'
+          && isValidIncident(incoming())
+          && incoming().factoryId == existing().factoryId
+          && incoming().factoryOwnerUid == existing().factoryOwnerUid
+          && incoming().createdByUid == existing().createdByUid
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'severity', 'updatedAt']);
+        allow delete: if false;
+      }
+
+      // =======================================================================
+      // ELECTRICAL & MECHANICAL MAINTENANCE RECORDS
+      // =======================================================================
+      function isValidMaintenanceRecord(data) {
+        return data.keys().hasAll([
+            'factoryId', 'factoryOwnerUid', 'accessUids', 'discipline', 'recordDate',
+            'machineId', 'machineName', 'faultDescription', 'actionTaken',
+            'downtimeMinutes', 'technicianName', 'status', 'recordOrigin',
+            'createdByUid', 'createdAt', 'updatedAt'
+          ])
+          && data.keys().hasOnly([
+            'factoryId', 'factoryOwnerUid', 'accessUids', 'discipline', 'recordDate',
+            'machineId', 'machineCode', 'machineName', 'incidentId', 'faultCategory',
+            'faultDescription', 'actionTaken', 'sparePartsUsed', 'downtimeMinutes',
+            'runningHours', 'servicingHours', 'technicianName', 'startTime',
+            'completionTime', 'restorationTime', 'observations', 'shift', 'status',
+            'recordOrigin', 'createdByUid', 'createdAt', 'updatedAt'
+          ])
+          && hasValidTenantEnvelope(data, factoryId)
+          && data.discipline in ['electrical', 'mechanical']
+          && isNonEmptyString(data.recordDate, 32)
+          && isNonEmptyString(data.machineId, 128)
+          && (!('machineCode' in data) || isStringSized(data.machineCode, 64))
+          && isNonEmptyString(data.machineName, 160)
+          && (!('incidentId' in data) || isStringSized(data.incidentId, 128))
+          && (!('faultCategory' in data) || isStringSized(data.faultCategory, 120))
+          && isNonEmptyString(data.faultDescription, 1500)
+          && isNonEmptyString(data.actionTaken, 1500)
+          && (!('sparePartsUsed' in data) || isStringSized(data.sparePartsUsed, 500))
+          && data.downtimeMinutes is number && data.downtimeMinutes >= 0
+          && (!('runningHours' in data) || (data.runningHours is number && data.runningHours >= 0))
+          && (!('servicingHours' in data) || (data.servicingHours is number && data.servicingHours >= 0))
+          && isNonEmptyString(data.technicianName, 120)
+          && (!('startTime' in data) || isStringSized(data.startTime, 16))
+          && (!('completionTime' in data) || isStringSized(data.completionTime, 16))
+          && (!('restorationTime' in data) || isStringSized(data.restorationTime, 16))
+          && (!('observations' in data) || isStringSized(data.observations, 1000))
+          && (!('shift' in data) || isStringSized(data.shift, 32))
+          && data.status in ['in_progress', 'completed', 'awaiting_review', 'approved']
+          && data.createdAt is timestamp
+          && data.updatedAt is timestamp;
+      }
+
+      match /electricalMaintenance/{recordId} {
+        allow get: if isVerifiedUser() && isValidId(recordId) && isFactoryMember(factoryId);
+        allow list: if hasValidListAccess(existing());
+        allow create: if isVerifiedUser() && isValidId(recordId)
+          && isFactoryMember(factoryId)
+          && getMemberRole(factoryId) in ['super_admin', 'factory_admin', 'factory_manager', 'production_manager', 'electrical_maintenance']
+          && isValidMaintenanceRecord(incoming())
+          && incoming().discipline == 'electrical'
+          && incoming().createdByUid == request.auth.uid
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time;
+        allow update: if isVerifiedUser() && isValidId(recordId)
+          && isFactoryMember(factoryId)
+          && existing().status != 'approved'
+          && isValidMaintenanceRecord(incoming())
+          && incoming().discipline == existing().discipline
+          && incoming().factoryId == existing().factoryId
+          && incoming().factoryOwnerUid == existing().factoryOwnerUid
+          && incoming().createdByUid == existing().createdByUid
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && incoming().diff(existing()).affectedKeys().hasOnly([
+            'actionTaken', 'sparePartsUsed', 'downtimeMinutes', 'servicingHours',
+            'completionTime', 'restorationTime', 'observations', 'status', 'updatedAt'
+          ]);
+        allow delete: if false;
+      }
+
+      match /mechanicalMaintenance/{recordId} {
+        allow get: if isVerifiedUser() && isValidId(recordId) && isFactoryMember(factoryId);
+        allow list: if hasValidListAccess(existing());
+        allow create: if isVerifiedUser() && isValidId(recordId)
+          && isFactoryMember(factoryId)
+          && getMemberRole(factoryId) in ['super_admin', 'factory_admin', 'factory_manager', 'production_manager', 'mechanical_maintenance']
+          && isValidMaintenanceRecord(incoming())
+          && incoming().discipline == 'mechanical'
+          && incoming().createdByUid == request.auth.uid
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time;
+        allow update: if isVerifiedUser() && isValidId(recordId)
+          && isFactoryMember(factoryId)
+          && existing().status != 'approved'
+          && isValidMaintenanceRecord(incoming())
+          && incoming().discipline == existing().discipline
+          && incoming().factoryId == existing().factoryId
+          && incoming().factoryOwnerUid == existing().factoryOwnerUid
+          && incoming().createdByUid == existing().createdByUid
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && incoming().diff(existing()).affectedKeys().hasOnly([
+            'actionTaken', 'sparePartsUsed', 'downtimeMinutes', 'servicingHours',
+            'completionTime', 'restorationTime', 'observations', 'status', 'updatedAt'
+          ]);
+        allow delete: if false;
+      }
+
+      // =======================================================================
+      // PREVENTIVE MAINTENANCE SCHEDULES
+      // =======================================================================
+      function isValidPreventiveSchedule(data) {
+        return data.keys().hasAll([
+            'factoryId', 'factoryOwnerUid', 'accessUids', 'machineId', 'machineName',
+            'taskTitle', 'intervalType', 'nextDueDate', 'status', 'recordOrigin',
+            'createdByUid', 'createdAt', 'updatedAt'
+          ])
+          && data.keys().hasOnly([
+            'factoryId', 'factoryOwnerUid', 'accessUids', 'machineId', 'machineName',
+            'discipline', 'taskTitle', 'intervalType', 'intervalValue', 'assignedTechnician',
+            'checklistSummary', 'lastCompletedDate', 'nextDueDate', 'status', 'recordOrigin',
+            'createdByUid', 'createdAt', 'updatedAt'
+          ])
+          && hasValidTenantEnvelope(data, factoryId)
+          && isNonEmptyString(data.machineId, 128)
+          && isNonEmptyString(data.machineName, 160)
+          && (!('discipline' in data) || data.discipline in ['electrical', 'mechanical'])
+          && isNonEmptyString(data.taskTitle, 200)
+          && data.intervalType in ['daily', 'weekly', 'monthly', 'custom', 'running_hours']
+          && (!('intervalValue' in data) || isStringSized(data.intervalValue, 64))
+          && (!('assignedTechnician' in data) || isStringSized(data.assignedTechnician, 120))
+          && (!('checklistSummary' in data) || isStringSized(data.checklistSummary, 1000))
+          && (!('lastCompletedDate' in data) || isStringSized(data.lastCompletedDate, 32))
+          && isNonEmptyString(data.nextDueDate, 32)
+          && data.status in ['scheduled', 'due_soon', 'overdue', 'completed']
+          && data.createdAt is timestamp
+          && data.updatedAt is timestamp;
+      }
+
+      match /preventiveSchedules/{scheduleId} {
+        allow get: if isVerifiedUser() && isValidId(scheduleId) && isFactoryMember(factoryId);
+        allow list: if hasValidListAccess(existing());
+        allow create: if isVerifiedUser() && isValidId(scheduleId)
+          && isFactoryMember(factoryId)
+          && getMemberRole(factoryId) in ['super_admin', 'factory_admin', 'factory_manager', 'production_manager', 'electrical_maintenance', 'mechanical_maintenance']
+          && isValidPreventiveSchedule(incoming())
+          && incoming().createdByUid == request.auth.uid
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time;
+        allow update: if isVerifiedUser() && isValidId(scheduleId)
+          && isFactoryMember(factoryId)
+          && getMemberRole(factoryId) in ['super_admin', 'factory_admin', 'factory_manager', 'production_manager', 'electrical_maintenance', 'mechanical_maintenance']
+          && isValidPreventiveSchedule(incoming())
+          && incoming().factoryId == existing().factoryId
+          && incoming().factoryOwnerUid == existing().factoryOwnerUid
+          && incoming().createdByUid == existing().createdByUid
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && incoming().diff(existing()).affectedKeys().hasOnly([
+            'lastCompletedDate', 'nextDueDate', 'status', 'assignedTechnician', 'checklistSummary', 'updatedAt'
+          ]);
+        allow delete: if false;
+      }
+
+      // =======================================================================
+      // SPARE PARTS INVENTORY
+      // =======================================================================
+      function isValidSparePart(data) {
+        return data.keys().hasAll([
+            'factoryId', 'factoryOwnerUid', 'accessUids', 'partCode', 'name',
+            'category', 'stockQty', 'minStockLevel', 'unit', 'recordOrigin',
+            'createdByUid', 'createdAt', 'updatedAt'
+          ])
+          && data.keys().hasOnly([
+            'factoryId', 'factoryOwnerUid', 'accessUids', 'partCode', 'name',
+            'category', 'stockQty', 'minStockLevel', 'unit', 'location',
+            'recordOrigin', 'createdByUid', 'createdAt', 'updatedAt'
+          ])
+          && hasValidTenantEnvelope(data, factoryId)
+          && isNonEmptyString(data.partCode, 64)
+          && isNonEmptyString(data.name, 160)
+          && data.category in ['electrical', 'mechanical', 'general']
+          && data.stockQty is number && data.stockQty >= 0
+          && data.minStockLevel is number && data.minStockLevel >= 0
+          && isNonEmptyString(data.unit, 32)
+          && (!('location' in data) || isStringSized(data.location, 120))
+          && data.createdAt is timestamp
+          && data.updatedAt is timestamp;
+      }
+
+      match /spareParts/{partId} {
+        allow get: if isVerifiedUser() && isValidId(partId) && isFactoryMember(factoryId);
+        allow list: if hasValidListAccess(existing());
+        allow create: if isVerifiedUser() && isValidId(partId)
+          && isFactoryMember(factoryId)
+          && getMemberRole(factoryId) in ['super_admin', 'factory_admin', 'factory_manager', 'storekeeper', 'electrical_maintenance', 'mechanical_maintenance']
+          && isValidSparePart(incoming())
+          && incoming().createdByUid == request.auth.uid
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time;
+        allow update: if isVerifiedUser() && isValidId(partId)
+          && isFactoryMember(factoryId)
+          && getMemberRole(factoryId) in ['super_admin', 'factory_admin', 'factory_manager', 'storekeeper', 'electrical_maintenance', 'mechanical_maintenance']
+          && isValidSparePart(incoming())
+          && incoming().factoryId == existing().factoryId
+          && incoming().factoryOwnerUid == existing().factoryOwnerUid
+          && incoming().createdByUid == existing().createdByUid
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && incoming().diff(existing()).affectedKeys().hasOnly(['stockQty', 'minStockLevel', 'location', 'updatedAt']);
+        allow delete: if false;
+      }
+
+      // =======================================================================
+      // DOWNTIME RECORDS
+      // =======================================================================
+      function isValidDowntime(data) {
+        return data.keys().hasAll([
+            'factoryId', 'factoryOwnerUid', 'accessUids', 'machineId', 'machineName',
+            'date', 'timeStopped', 'totalStoppageMinutes', 'activeRepairMinutes',
+            'reason', 'departmentResponsible', 'recordOrigin', 'createdByUid', 'createdAt', 'updatedAt'
+          ])
+          && data.keys().hasOnly([
+            'factoryId', 'factoryOwnerUid', 'accessUids', 'machineId', 'machineName',
+            'productionLine', 'date', 'timeStopped', 'timeReported', 'maintenanceStartTime',
+            'timeResolved', 'timeProductionResumed', 'totalStoppageMinutes', 'activeRepairMinutes',
+            'reason', 'departmentResponsible', 'technicianAssigned', 'resolution',
+            'recordOrigin', 'createdByUid', 'createdAt', 'updatedAt'
+          ])
+          && hasValidTenantEnvelope(data, factoryId)
+          && isNonEmptyString(data.machineId, 128)
+          && isNonEmptyString(data.machineName, 160)
+          && (!('productionLine' in data) || isStringSized(data.productionLine, 80))
+          && isNonEmptyString(data.date, 32)
+          && isNonEmptyString(data.timeStopped, 16)
+          && (!('timeReported' in data) || isStringSized(data.timeReported, 16))
+          && (!('maintenanceStartTime' in data) || isStringSized(data.maintenanceStartTime, 16))
+          && (!('timeResolved' in data) || isStringSized(data.timeResolved, 16))
+          && (!('timeProductionResumed' in data) || isStringSized(data.timeProductionResumed, 16))
+          && data.totalStoppageMinutes is number && data.totalStoppageMinutes >= 0
+          && data.activeRepairMinutes is number && data.activeRepairMinutes >= 0
+          && isNonEmptyString(data.reason, 500)
+          && isNonEmptyString(data.departmentResponsible, 80)
+          && (!('technicianAssigned' in data) || isStringSized(data.technicianAssigned, 120))
+          && (!('resolution' in data) || isStringSized(data.resolution, 1000))
+          && data.createdAt is timestamp
+          && data.updatedAt is timestamp;
+      }
+
+      match /downtimeRecords/{downtimeId} {
+        allow get: if isVerifiedUser() && isValidId(downtimeId) && isFactoryMember(factoryId);
+        allow list: if hasValidListAccess(existing());
+        allow create: if isVerifiedUser() && isValidId(downtimeId)
+          && isFactoryMember(factoryId)
+          && isValidDowntime(incoming())
+          && incoming().createdByUid == request.auth.uid
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time;
+        allow update: if isVerifiedUser() && isValidId(downtimeId)
+          && isFactoryMember(factoryId)
+          && isValidDowntime(incoming())
+          && incoming().factoryId == existing().factoryId
+          && incoming().factoryOwnerUid == existing().factoryOwnerUid
+          && incoming().createdByUid == existing().createdByUid
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && incoming().diff(existing()).affectedKeys().hasOnly([
+            'timeResolved', 'timeProductionResumed', 'totalStoppageMinutes',
+            'activeRepairMinutes', 'resolution', 'updatedAt'
+          ]);
+        allow delete: if false;
+      }
+
+      // =======================================================================
+      // QUALITY INSPECTIONS
+      // =======================================================================
+      function isValidQualityInspection(data) {
+        return data.keys().hasAll([
+            'factoryId', 'factoryOwnerUid', 'accessUids', 'productName', 'productionLine',
+            'inspectionDate', 'batchNumber', 'result', 'defectiveQty', 'inspectorName',
+            'recordOrigin', 'createdByUid', 'createdAt', 'updatedAt'
+          ])
+          && data.keys().hasOnly([
+            'factoryId', 'factoryOwnerUid', 'accessUids', 'productName', 'productionLine',
+            'inspectionDate', 'batchNumber', 'result', 'defectiveQty', 'defectCategory',
+            'rejectionReason', 'inspectorName', 'correctiveAction', 'recordOrigin',
+            'createdByUid', 'createdAt', 'updatedAt'
+          ])
+          && hasValidTenantEnvelope(data, factoryId)
+          && isNonEmptyString(data.productName, 160)
+          && isNonEmptyString(data.productionLine, 80)
+          && isNonEmptyString(data.inspectionDate, 32)
+          && isNonEmptyString(data.batchNumber, 80)
+          && data.result in ['passed', 'hold', 'rejected']
+          && data.defectiveQty is number && data.defectiveQty >= 0
+          && (!('defectCategory' in data) || isStringSized(data.defectCategory, 120))
+          && (!('rejectionReason' in data) || isStringSized(data.rejectionReason, 500))
+          && isNonEmptyString(data.inspectorName, 120)
+          && (!('correctiveAction' in data) || isStringSized(data.correctiveAction, 1000))
+          && data.createdAt is timestamp
+          && data.updatedAt is timestamp;
+      }
+
+      match /qualityInspections/{qcId} {
+        allow get: if isVerifiedUser() && isValidId(qcId) && isFactoryMember(factoryId);
+        allow list: if hasValidListAccess(existing());
+        allow create: if isVerifiedUser() && isValidId(qcId)
+          && isFactoryMember(factoryId)
+          && getMemberRole(factoryId) in ['super_admin', 'factory_admin', 'factory_manager', 'production_manager', 'quality_control']
+          && isValidQualityInspection(incoming())
+          && incoming().createdByUid == request.auth.uid
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time;
+        allow update: if isVerifiedUser() && isValidId(qcId)
+          && isManagementOrAdmin(factoryId)
+          && isValidQualityInspection(incoming())
+          && incoming().factoryId == existing().factoryId
+          && incoming().factoryOwnerUid == existing().factoryOwnerUid
+          && incoming().createdByUid == existing().createdByUid
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && incoming().diff(existing()).affectedKeys().hasOnly(['result', 'correctiveAction', 'updatedAt']);
+        allow delete: if false;
+      }
+
+      // =======================================================================
+      // SHIFT REPORTS & HANDOVERS
+      // =======================================================================
+      function isValidShiftReport(data) {
+        return data.keys().hasAll([
+            'factoryId', 'factoryOwnerUid', 'accessUids', 'department', 'reportType',
+            'shift', 'reportDate', 'supervisorName', 'activitiesCompleted', 'status',
+            'recordOrigin', 'createdByUid', 'createdAt', 'updatedAt'
+          ])
+          && data.keys().hasOnly([
+            'factoryId', 'factoryOwnerUid', 'accessUids', 'department', 'reportType',
+            'shift', 'reportDate', 'supervisorName', 'activitiesCompleted', 'productionSummary',
+            'machineIssues', 'maintenanceActivities', 'outstandingProblems', 'unresolvedIncidentsCount',
+            'materialsUsed', 'sparePartsUsed', 'totalDowntimeMinutes', 'runningHours',
+            'servicingHours', 'observations', 'handoverNotes', 'status', 'reviewedByName',
+            'recordOrigin', 'createdByUid', 'createdAt', 'updatedAt'
+          ])
+          && hasValidTenantEnvelope(data, factoryId)
+          && isNonEmptyString(data.department, 80)
+          && data.reportType in ['departmental', 'electrical_shift_end', 'mechanical_shift_end']
+          && isNonEmptyString(data.shift, 32)
+          && isNonEmptyString(data.reportDate, 32)
+          && isNonEmptyString(data.supervisorName, 120)
+          && isNonEmptyString(data.activitiesCompleted, 2000)
+          && (!('productionSummary' in data) || isStringSized(data.productionSummary, 1000))
+          && (!('machineIssues' in data) || isStringSized(data.machineIssues, 1000))
+          && (!('maintenanceActivities' in data) || isStringSized(data.maintenanceActivities, 1000))
+          && (!('outstandingProblems' in data) || isStringSized(data.outstandingProblems, 1000))
+          && (!('unresolvedIncidentsCount' in data) || (data.unresolvedIncidentsCount is number && data.unresolvedIncidentsCount >= 0))
+          && (!('materialsUsed' in data) || isStringSized(data.materialsUsed, 500))
+          && (!('sparePartsUsed' in data) || isStringSized(data.sparePartsUsed, 500))
+          && (!('totalDowntimeMinutes' in data) || (data.totalDowntimeMinutes is number && data.totalDowntimeMinutes >= 0))
+          && (!('runningHours' in data) || (data.runningHours is number && data.runningHours >= 0))
+          && (!('servicingHours' in data) || (data.servicingHours is number && data.servicingHours >= 0))
+          && (!('observations' in data) || isStringSized(data.observations, 1000))
+          && (!('handoverNotes' in data) || isStringSized(data.handoverNotes, 1000))
+          && data.status in ['draft', 'submitted', 'reviewed']
+          && (!('reviewedByName' in data) || isStringSized(data.reviewedByName, 120))
+          && data.createdAt is timestamp
+          && data.updatedAt is timestamp;
+      }
+
+      match /shiftReports/{reportId} {
+        allow get: if isVerifiedUser() && isValidId(reportId) && isFactoryMember(factoryId);
+        allow list: if hasValidListAccess(existing());
+        allow create: if isVerifiedUser() && isValidId(reportId)
+          && isFactoryMember(factoryId)
+          && isValidShiftReport(incoming())
+          && incoming().createdByUid == request.auth.uid
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time;
+        allow update: if isVerifiedUser() && isValidId(reportId)
+          && isFactoryMember(factoryId)
+          && (existing().status != 'reviewed' || isFactoryAdmin(factoryId))
+          && isValidShiftReport(incoming())
+          && incoming().factoryId == existing().factoryId
+          && incoming().factoryOwnerUid == existing().factoryOwnerUid
+          && incoming().createdByUid == existing().createdByUid
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && (
+            (isManagementOrAdmin(factoryId) && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'reviewedByName', 'updatedAt'])) ||
+            (existing().createdByUid == request.auth.uid && existing().status == 'draft' && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'activitiesCompleted', 'handoverNotes', 'observations', 'updatedAt']))
+          );
+        allow delete: if false;
+      }
+
+      // =======================================================================
+      // DIGITAL DOCUMENT ARCHIVE & STAGED IMPORTS
+      // =======================================================================
+      function isValidDocumentRecord(data) {
+        return data.keys().hasAll([
+            'factoryId', 'factoryOwnerUid', 'accessUids', 'title', 'reportType',
+            'department', 'fileName', 'fileType', 'reviewStatus', 'uploadedByName',
+            'uploadedDate', 'recordOrigin', 'createdByUid', 'createdAt', 'updatedAt'
+          ])
+          && data.keys().hasOnly([
+            'factoryId', 'factoryOwnerUid', 'accessUids', 'title', 'reportType',
+            'department', 'machineName', 'materialBatch', 'fileName', 'fileType',
+            'fileSizeBytes', 'extractedSummary', 'reviewStatus', 'uploadedByName',
+            'uploadedDate', 'recordOrigin', 'createdByUid', 'createdAt', 'updatedAt'
+          ])
+          && hasValidTenantEnvelope(data, factoryId)
+          && isNonEmptyString(data.title, 200)
+          && isNonEmptyString(data.reportType, 80)
+          && isNonEmptyString(data.department, 80)
+          && (!('machineName' in data) || isStringSized(data.machineName, 160))
+          && (!('materialBatch' in data) || isStringSized(data.materialBatch, 80))
+          && isNonEmptyString(data.fileName, 200)
+          && data.fileType in ['pdf', 'csv', 'xlsx', 'image', 'manual']
+          && (!('fileSizeBytes' in data) || (data.fileSizeBytes is number && data.fileSizeBytes >= 0))
+          && (!('extractedSummary' in data) || isStringSized(data.extractedSummary, 4000))
+          && data.reviewStatus in ['verified', 'pending_human_review']
+          && isNonEmptyString(data.uploadedByName, 120)
+          && isNonEmptyString(data.uploadedDate, 32)
+          && data.createdAt is timestamp
+          && data.updatedAt is timestamp;
+      }
+
+      match /documents/{docId} {
+        allow get: if isVerifiedUser() && isValidId(docId) && isFactoryMember(factoryId);
+        allow list: if hasValidListAccess(existing());
+        allow create: if isVerifiedUser() && isValidId(docId)
+          && isFactoryMember(factoryId)
+          && isValidDocumentRecord(incoming())
+          && incoming().createdByUid == request.auth.uid
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time;
+        allow update: if isVerifiedUser() && isValidId(docId)
+          && isManagementOrAdmin(factoryId)
+          && isValidDocumentRecord(incoming())
+          && incoming().factoryId == existing().factoryId
+          && incoming().factoryOwnerUid == existing().factoryOwnerUid
+          && incoming().createdByUid == existing().createdByUid
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && incoming().diff(existing()).affectedKeys().hasOnly(['reviewStatus', 'extractedSummary', 'updatedAt']);
+        allow delete: if false;
+      }
+
+      // =======================================================================
+      // NOTIFICATIONS
+      // =======================================================================
+      function isValidNotification(data) {
+        return data.keys().hasAll([
+            'factoryId', 'factoryOwnerUid', 'accessUids', 'type', 'title',
+            'message', 'severity', 'isRead', 'recordOrigin', 'createdByUid', 'createdAt', 'updatedAt'
+          ])
+          && data.keys().hasOnly([
+            'factoryId', 'factoryOwnerUid', 'accessUids', 'type', 'title',
+            'message', 'severity', 'isRead', 'relatedModule', 'recordOrigin',
+            'createdByUid', 'createdAt', 'updatedAt'
+          ])
+          && hasValidTenantEnvelope(data, factoryId)
+          && isNonEmptyString(data.type, 64)
+          && isNonEmptyString(data.title, 160)
+          && isNonEmptyString(data.message, 500)
+          && data.severity in ['info', 'warning', 'critical']
+          && data.isRead is bool
+          && (!('relatedModule' in data) || isStringSized(data.relatedModule, 64))
+          && data.createdAt is timestamp
+          && data.updatedAt is timestamp;
+      }
+
+      match /notifications/{notifId} {
+        allow get: if isVerifiedUser() && isValidId(notifId) && isFactoryMember(factoryId);
+        allow list: if hasValidListAccess(existing());
+        allow create: if isVerifiedUser() && isValidId(notifId)
+          && isFactoryMember(factoryId)
+          && isValidNotification(incoming())
+          && incoming().createdByUid == request.auth.uid
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time;
+        allow update: if isVerifiedUser() && isValidId(notifId)
+          && isFactoryMember(factoryId)
+          && isValidNotification(incoming())
+          && incoming().factoryId == existing().factoryId
+          && incoming().factoryOwnerUid == existing().factoryOwnerUid
+          && incoming().createdByUid == existing().createdByUid
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && incoming().diff(existing()).affectedKeys().hasOnly(['isRead', 'updatedAt']);
+        allow delete: if false;
+      }
+
+      // =======================================================================
+      // IMMUTABLE AUDIT LOGS
+      // =======================================================================
+      function isValidAuditLog(data) {
+        return data.keys().hasAll([
+            'factoryId', 'factoryOwnerUid', 'accessUids', 'actorUid', 'actorName',
+            'actorRole', 'action', 'entityType', 'entityId', 'createdByUid', 'createdAt'
+          ])
+          && data.keys().hasOnly([
+            'factoryId', 'factoryOwnerUid', 'accessUids', 'actorUid', 'actorName',
+            'actorRole', 'action', 'entityType', 'entityId', 'previousValue', 'newValue',
+            'createdByUid', 'createdAt'
+          ])
+          && data.factoryId == factoryId
+          && isNonEmptyString(data.factoryOwnerUid, 128)
+          && isBoundedUidList(data.accessUids)
+          && data.actorUid == request.auth.uid
+          && isNonEmptyString(data.actorName, 120)
+          && isNonEmptyString(data.actorRole, 64)
+          && data.action in ['create', 'update', 'archive', 'review']
+          && isNonEmptyString(data.entityType, 64)
+          && isNonEmptyString(data.entityId, 128)
+          && (!('previousValue' in data) || isStringSized(data.previousValue, 1000))
+          && (!('newValue' in data) || isStringSized(data.newValue, 1000))
+          && data.createdByUid == request.auth.uid
+          && data.createdAt is timestamp;
+      }
+
+      match /auditLogs/{logId} {
+        allow get: if isVerifiedUser() && isValidId(logId) && isFactoryMember(factoryId);
+        allow list: if hasValidListAccess(existing());
+        allow create: if isVerifiedUser() && isValidId(logId)
+          && isFactoryMember(factoryId)
+          && isValidAuditLog(incoming())
+          && incoming().createdAt == request.time;
+        allow update: if false;
+        allow delete: if false;
+      }
+    }
+  }
+}
